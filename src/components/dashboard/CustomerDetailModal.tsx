@@ -91,7 +91,7 @@ export function CustomerDetailModal({ customer, onClose }: CustomerDetailModalPr
     try {
       setMemoSaving(true)
       const supabase = createClient()
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('customers')
         .update({ notes: memo })
         .eq('id', customer.id)

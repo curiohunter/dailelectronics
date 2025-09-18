@@ -51,25 +51,15 @@ export async function updateSession(request: NextRequest) {
   const isProtectedPath = protectedPaths.some(path => request.nextUrl.pathname.startsWith(path))
 
   if (user && isProtectedPath) {
-    // employees 테이블에서 사용자 정보 확인 (캐시 방지)
-    const timestamp = Date.now()
+    // employees 테이블에서 사용자 정보 확인
     const { data: employee, error } = await supabase
       .from('employees')
       .select('is_active, is_admin, updated_at')
       .eq('auth_user_id', user.id)
       .single()
 
-    console.log('Middleware auth check:', {
-      userId: user.id,
-      path: request.nextUrl.pathname,
-      employee: employee,
-      error: error,
-      timestamp: timestamp
-    })
-
     // 직원 정보가 없거나 비활성 상태면 접근 거부
     if (!employee || !employee.is_active) {
-      console.log('Access denied - redirecting to unauthorized')
       const url = request.nextUrl.clone()
       url.pathname = '/unauthorized'
       return NextResponse.redirect(url)

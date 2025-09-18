@@ -33,10 +33,14 @@ import {
 } from "lucide-react"
 
 interface BankDeposit {
+  id: string
   transaction_date: string
   transaction_time: string | null
   deposit_name: string | null
   deposit_amount: number
+  branch_name: string | null
+  created_at: string | null
+  [key: string]: any
 }
 
 interface OtherDeposit {

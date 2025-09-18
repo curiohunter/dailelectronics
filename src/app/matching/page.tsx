@@ -20,16 +20,17 @@ import { Plus } from "lucide-react"
 
 interface Customer {
   id: string
-  business_number: string | null
   company_name: string
-  representative_name: string | null
-  address: string | null
-  email: string | null
-  phone: string | null
-  notes: string | null
-  alias_names: string[] | null
-  created_at: string | null
-  updated_at: string | null
+  business_number?: string | null
+  representative_name?: string | null
+  address?: string | null
+  email?: string | null
+  phone?: string | null
+  notes?: string | null
+  alias_names?: string[] | null
+  created_at?: string | null
+  updated_at?: string | null
+  [key: string]: any
 }
 
 interface TaxInvoice {
@@ -175,8 +176,8 @@ export default function MatchingPage() {
       setCustomers(customersData || [])
       
       // Process tax invoices with relationship status
-      const processedInvoices = (invoicesData || []).map(invoice => {
-        const relation = invoiceRelationsData?.find(rel => rel.tax_invoice_id === invoice.id)
+      const processedInvoices = (invoicesData || []).map((invoice: any) => {
+        const relation = invoiceRelationsData?.find((rel: any) => rel.tax_invoice_id === invoice.id) as any
         return {
           ...invoice,
           hasRelation: !!relation?.customer_id,
@@ -184,11 +185,11 @@ export default function MatchingPage() {
         }
       })
       setTaxInvoices(processedInvoices)
-      
+
       // Process bank deposits with relationship status and classifications
-      const processedDeposits = (depositsData || []).map(deposit => {
-        const relation = depositRelationsData?.find(rel => rel.bank_deposit_id === deposit.id)
-        const classification = depositClassificationsData?.find(cls => cls.bank_deposit_id === deposit.id)
+      const processedDeposits = (depositsData || []).map((deposit: any) => {
+        const relation = depositRelationsData?.find((rel: any) => rel.bank_deposit_id === deposit.id) as any
+        const classification = depositClassificationsData?.find((cls: any) => cls.bank_deposit_id === deposit.id) as any
         return {
           ...deposit,
           hasRelation: !!relation?.customer_id,
@@ -301,7 +302,7 @@ export default function MatchingPage() {
 
       if (existingRelation) {
         // Update existing relation
-        const { error } = await supabase
+        const { error } = await (supabase as any)
           .from('customer_tax_invoices')
           .update({ customer_id: customerId })
           .eq('tax_invoice_id', invoiceId)
@@ -309,7 +310,7 @@ export default function MatchingPage() {
         if (error) throw error
       } else {
         // Create new relation
-        const { error } = await supabase
+        const { error } = await (supabase as any)
           .from('customer_tax_invoices')
           .insert({ tax_invoice_id: invoiceId, customer_id: customerId })
         
@@ -335,10 +336,7 @@ export default function MatchingPage() {
             return {
               ...inv,
               hasRelation: true,
-              relatedCustomer: customer ? {
-                id: customer.id,
-                company_name: customer.company_name
-              } : null
+              relatedCustomer: customer || null
             }
           }
           return inv
@@ -361,7 +359,7 @@ export default function MatchingPage() {
         .from('bank_deposits')
         .select('deposit_name')
         .eq('id', depositId)
-        .single()
+        .single() as { data: { deposit_name: string | null } | null, error: any }
 
       if (!deposit || !deposit.deposit_name) {
         throw new Error('입금내역 정보를 찾을 수 없습니다.')
@@ -370,9 +368,9 @@ export default function MatchingPage() {
       // 2. 고객사 정보 가져오기
       const { data: customer } = await supabase
         .from('customers')
-        .select('id, company_name, alias_names')
+        .select('*')
         .eq('id', customerId)
-        .single()
+        .single() as { data: Customer | null, error: any }
 
       if (!customer) {
         throw new Error('고객사 정보를 찾을 수 없습니다.')
@@ -386,7 +384,7 @@ export default function MatchingPage() {
         updatedAliases = [...updatedAliases, depositName]
 
         // 고객사 별칭 업데이트
-        const { error: updateError } = await supabase
+        const { error: updateError } = await (supabase as any)
           .from('customers')
           .update({
             alias_names: updatedAliases,
@@ -410,7 +408,7 @@ export default function MatchingPage() {
 
       if (existingRelation) {
         // Update existing relation
-        const { error } = await supabase
+        const { error } = await (supabase as any)
           .from('customer_bank_deposits')
           .update({ customer_id: customerId })
           .eq('bank_deposit_id', depositId)
@@ -418,7 +416,7 @@ export default function MatchingPage() {
         if (error) throw error
       } else {
         // Create new relation
-        const { error } = await supabase
+        const { error } = await (supabase as any)
           .from('customer_bank_deposits')
           .insert({ bank_deposit_id: depositId, customer_id: customerId })
 
@@ -430,7 +428,7 @@ export default function MatchingPage() {
         .from('bank_deposits')
         .select('id')
         .eq('deposit_name', deposit.deposit_name)
-        .neq('id', depositId) // 현재 처리한 것 제외
+        .neq('id', depositId) as { data: { id: string }[] | null, error: any } // 현재 처리한 것 제외
 
       if (unconnectedDeposits && unconnectedDeposits.length > 0) {
         let autoConnectedCount = 0
@@ -441,13 +439,13 @@ export default function MatchingPage() {
             .from('customer_bank_deposits')
             .select('customer_id')
             .eq('bank_deposit_id', unconnected.id)
-            .single()
+            .single() as { data: { customer_id: string | null } | null, error: any }
 
           // 미연결 상태거나 customer_id가 null인 경우만 연결
           if (!existingRel || !existingRel.customer_id) {
             if (existingRel) {
               // 관계는 있지만 customer_id가 null인 경우 업데이트
-              const { error } = await supabase
+              const { error } = await (supabase as any)
                 .from('customer_bank_deposits')
                 .update({ customer_id: customerId })
                 .eq('bank_deposit_id', unconnected.id)
@@ -455,7 +453,7 @@ export default function MatchingPage() {
               if (!error) autoConnectedCount++
             } else {
               // 관계가 없는 경우 새로 생성
-              const { error } = await supabase
+              const { error } = await (supabase as any)
                 .from('customer_bank_deposits')
                 .insert({
                   bank_deposit_id: unconnected.id,
@@ -485,10 +483,7 @@ export default function MatchingPage() {
             return {
               ...dep,
               hasRelation: true,
-              relatedCustomer: {
-                id: customer.id,
-                company_name: customer.company_name
-              }
+              relatedCustomer: customer
             }
           }
           return dep
@@ -533,7 +528,7 @@ export default function MatchingPage() {
 
       if (existingClassification) {
         // 기존 분류 업데이트
-        const { error } = await supabase
+        const { error } = await (supabase as any)
           .from('bank_deposit_classifications')
           .update({
             classification_type: type,
@@ -545,7 +540,7 @@ export default function MatchingPage() {
         if (error) throw error
       } else {
         // 새 분류 생성
-        const { error } = await supabase
+        const { error } = await (supabase as any)
           .from('bank_deposit_classifications')
           .insert({
             bank_deposit_id: depositId,
@@ -634,7 +629,7 @@ export default function MatchingPage() {
           .from('customers')
           .select('alias_names')
           .eq('id', editingCustomer.id)
-          .single()
+          .single() as { data: { alias_names: string[] | null } | null, error: any }
 
         const currentAliases = currentCustomer?.alias_names || []
         const newAliases = customerData.alias_names || []
@@ -648,13 +643,13 @@ export default function MatchingPage() {
           const { data: depositsToDisconnect } = await supabase
             .from('bank_deposits')
             .select('id')
-            .in('deposit_name', removedAliases)
+            .in('deposit_name', removedAliases) as { data: { id: string }[] | null, error: any }
 
           if (depositsToDisconnect && depositsToDisconnect.length > 0) {
             const depositIds = depositsToDisconnect.map(d => d.id)
 
             // Remove the relationships for these deposits
-            const { error: relationError } = await supabase
+            const { error: relationError } = await (supabase as any)
               .from('customer_bank_deposits')
               .delete()
               .eq('customer_id', editingCustomer.id)
@@ -670,7 +665,7 @@ export default function MatchingPage() {
         }
 
         // Update existing customer
-        const { error } = await supabase
+        const { error } = await (supabase as any)
           .from('customers')
           .update(customerData)
           .eq('id', editingCustomer.id)
@@ -683,7 +678,7 @@ export default function MatchingPage() {
         })
       } else {
         // Create new customer
-        const { error } = await supabase
+        const { error } = await (supabase as any)
           .from('customers')
           .insert(customerData)
 
@@ -750,7 +745,7 @@ export default function MatchingPage() {
     try {
       if (editingInvoice) {
         // Update existing invoice
-        const { error } = await supabase
+        const { error } = await (supabase as any)
           .from('tax_invoices')
           .update(invoiceData)
           .eq('id', editingInvoice.id)
@@ -763,7 +758,7 @@ export default function MatchingPage() {
         })
       } else {
         // Create new invoice
-        const { error } = await supabase
+        const { error } = await (supabase as any)
           .from('tax_invoices')
           .insert(invoiceData)
 
@@ -833,7 +828,7 @@ export default function MatchingPage() {
 
       if (editingDeposit) {
         // Update existing deposit
-        const { error: depositError } = await supabase
+        const { error: depositError } = await (supabase as any)
           .from('bank_deposits')
           .update(depositUpdateData)
           .eq('id', editingDeposit.id)
@@ -852,7 +847,7 @@ export default function MatchingPage() {
           if (customer_id === null) {
             // Remove relationship if exists
             if (existingRelation) {
-              const { error: deleteError } = await supabase
+              const { error: deleteError } = await (supabase as any)
                 .from('customer_bank_deposits')
                 .delete()
                 .eq('bank_deposit_id', editingDeposit.id)
@@ -862,14 +857,14 @@ export default function MatchingPage() {
           } else {
             // Update or create relationship
             if (existingRelation) {
-              const { error: updateError } = await supabase
+              const { error: updateError } = await (supabase as any)
                 .from('customer_bank_deposits')
                 .update({ customer_id })
                 .eq('bank_deposit_id', editingDeposit.id)
 
               if (updateError) throw updateError
             } else {
-              const { error: insertError } = await supabase
+              const { error: insertError } = await (supabase as any)
                 .from('customer_bank_deposits')
                 .insert({ customer_id, bank_deposit_id: editingDeposit.id })
 
@@ -882,12 +877,12 @@ export default function MatchingPage() {
                 .from('customers')
                 .select('alias_names')
                 .eq('id', customer_id)
-                .single()
+                .single() as { data: { alias_names: string[] | null } | null, error: any }
 
               if (customer) {
                 const currentAliases = customer.alias_names || []
                 if (!currentAliases.includes(depositUpdateData.deposit_name)) {
-                  const { error: aliasError } = await supabase
+                  const { error: aliasError } = await (supabase as any)
                     .from('customers')
                     .update({
                       alias_names: [...currentAliases, depositUpdateData.deposit_name]
@@ -907,7 +902,7 @@ export default function MatchingPage() {
         })
       } else {
         // Create new deposit
-        const { data: newDeposit, error: depositError } = await supabase
+        const { data: newDeposit, error: depositError } = await (supabase as any)
           .from('bank_deposits')
           .insert(depositUpdateData)
           .select()
@@ -917,7 +912,7 @@ export default function MatchingPage() {
 
         // Create relationship if customer_id is provided
         if (customer_id && newDeposit) {
-          const { error: relationError } = await supabase
+          const { error: relationError } = await (supabase as any)
             .from('customer_bank_deposits')
             .insert({ customer_id, bank_deposit_id: newDeposit.id })
 
@@ -929,12 +924,12 @@ export default function MatchingPage() {
               .from('customers')
               .select('alias_names')
               .eq('id', customer_id)
-              .single()
+              .single() as { data: { alias_names: string[] | null } | null, error: any }
 
             if (customer) {
               const currentAliases = customer.alias_names || []
               if (!currentAliases.includes(depositUpdateData.deposit_name)) {
-                const { error: aliasError } = await supabase
+                const { error: aliasError } = await (supabase as any)
                   .from('customers')
                   .update({
                     alias_names: [...currentAliases, depositUpdateData.deposit_name]
@@ -1012,7 +1007,7 @@ export default function MatchingPage() {
     try {
       if (editingOtherDeposit) {
         // Update existing classification
-        const { error } = await supabase
+        const { error } = await (supabase as any)
           .from('bank_deposit_classifications')
           .update({
             classification_type: data.classification_type,
@@ -1029,7 +1024,7 @@ export default function MatchingPage() {
         })
       } else {
         // Create new classification
-        const { error } = await supabase
+        const { error } = await (supabase as any)
           .from('bank_deposit_classifications')
           .insert({
             bank_deposit_id: data.bank_deposit_id,

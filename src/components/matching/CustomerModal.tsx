@@ -16,16 +16,17 @@ import { X, Plus } from "lucide-react"
 
 interface Customer {
   id: string
-  business_number: string | null
   company_name: string
-  representative_name: string | null
-  address: string | null
-  email: string | null
-  phone: string | null
-  notes: string | null
-  alias_names: string[] | null
-  created_at: string | null
-  updated_at: string | null
+  business_number?: string | null
+  representative_name?: string | null
+  address?: string | null
+  email?: string | null
+  phone?: string | null
+  notes?: string | null
+  alias_names?: string[] | null
+  created_at?: string | null
+  updated_at?: string | null
+  [key: string]: any
 }
 
 interface CustomerForm {

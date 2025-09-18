@@ -10,18 +10,9 @@ import { Switch } from '@/components/ui/switch'
 import { createClient } from '@/lib/supabase/client'
 import { Loader2, UserCheck, UserX } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
+import type { Database } from '@/types/database.types'
 
-interface Employee {
-  id: string
-  name: string
-  email: string
-  phone?: string
-  auth_user_id?: string
-  is_admin: boolean
-  is_active: boolean
-  created_at: string
-  updated_at: string
-}
+type Employee = Database['public']['Tables']['employees']['Row']
 
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState<Employee[]>([])
@@ -57,7 +48,7 @@ export default function EmployeesPage() {
 
   const handleToggleActive = async (employee: Employee) => {
     try {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('employees')
         .update({ is_active: !employee.is_active })
         .eq('id', employee.id)
@@ -81,7 +72,7 @@ export default function EmployeesPage() {
 
   const handleToggleAdmin = async (employee: Employee) => {
     try {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('employees')
         .update({ is_admin: !employee.is_admin })
         .eq('id', employee.id)
@@ -128,7 +119,7 @@ export default function EmployeesPage() {
       }
 
       // employees 테이블에서 삭제
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('employees')
         .delete()
         .eq('id', employee.id)
@@ -216,7 +207,7 @@ export default function EmployeesPage() {
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <Switch
-                            checked={employee.is_admin}
+                            checked={employee.is_admin || false}
                             onCheckedChange={() => handleToggleAdmin(employee)}
                             disabled={index === 0} // Prevent changing first admin
                           />
@@ -228,7 +219,7 @@ export default function EmployeesPage() {
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <Switch
-                            checked={employee.is_active}
+                            checked={employee.is_active || false}
                             onCheckedChange={() => handleToggleActive(employee)}
                           />
                           {employee.is_active ? (
@@ -245,7 +236,7 @@ export default function EmployeesPage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        {new Date(employee.created_at).toLocaleDateString('ko-KR')}
+                        {employee.created_at ? new Date(employee.created_at).toLocaleDateString('ko-KR') : '-'}
                       </TableCell>
                       <TableCell className="text-center">
                         <Button

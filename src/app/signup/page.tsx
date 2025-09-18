@@ -69,7 +69,7 @@ export default function SignupPage() {
 
       if (authData.user) {
         // Create employee record
-        const { error: employeeError } = await supabase
+        const { error: employeeError } = await (supabase as any)
           .from('employees')
           .insert({
             email,

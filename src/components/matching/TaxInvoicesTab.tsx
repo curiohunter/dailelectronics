@@ -37,6 +37,16 @@ import {
 interface Customer {
   id: string
   company_name: string
+  business_number?: string | null
+  representative_name?: string | null
+  address?: string | null
+  email?: string | null
+  phone?: string | null
+  notes?: string | null
+  alias_names?: string[] | null
+  created_at?: string | null
+  updated_at?: string | null
+  [key: string]: any
 }
 
 interface TaxInvoice {

@@ -15,13 +15,13 @@ export async function DELETE(request: NextRequest) {
       )
     }
 
-    const { data: currentEmployee } = await supabase
+    const { data: currentEmployee, error: fetchError } = await supabase
       .from('employees')
       .select('is_admin')
       .eq('auth_user_id', user.id)
-      .single()
+      .single() as { data: { is_admin: boolean } | null, error: any }
 
-    if (!currentEmployee?.is_admin) {
+    if (fetchError || !currentEmployee || !currentEmployee.is_admin) {
       return NextResponse.json(
         { error: '관리자 권한이 필요합니다' },
         { status: 403 }

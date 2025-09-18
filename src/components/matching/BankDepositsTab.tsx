@@ -59,6 +59,16 @@ import { cn } from "@/lib/utils"
 interface Customer {
   id: string
   company_name: string
+  business_number?: string | null
+  representative_name?: string | null
+  address?: string | null
+  email?: string | null
+  phone?: string | null
+  notes?: string | null
+  alias_names?: string[] | null
+  created_at?: string | null
+  updated_at?: string | null
+  [key: string]: any
 }
 
 interface DepositClassification {
@@ -637,7 +647,7 @@ export function BankDepositsTab({
         open={classificationModalOpen}
         onOpenChange={setClassificationModalOpen}
         type={classificationModalType}
-        depositName={selectedDepositForClassification?.deposit_name}
+        depositName={selectedDepositForClassification?.deposit_name || null}
         onSave={(classification) => {
           if (selectedDepositForClassification) {
             onClassifyDeposit(

@@ -266,7 +266,7 @@ export default function DashboardPage() {
             // Filter by selected month (same logic as monthlyInvoices)
             if (depositDate.getMonth() === selectedMonthNum && depositDate.getFullYear() === selectedYear) {
               // Convert string to number (Supabase returns decimal as string)
-              const amount = parseFloat(deposit.deposit_amount)
+              const amount = typeof deposit.deposit_amount === 'string' ? parseFloat(deposit.deposit_amount) : deposit.deposit_amount
 
               // Find the customer associated with this deposit
               const depositRelation = depositRelations?.find(dr => dr.bank_deposit_id === classification.bank_deposit_id)
