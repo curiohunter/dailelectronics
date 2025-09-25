@@ -1,16 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { FileParser } from '@/services/file-parser'
-import { createClient } from '@supabase/supabase-js'
+import { createClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database.types'
 
 type CustomerUpdate = Database['public']['Tables']['customers']['Update']
 
-// Create supabase client for server-side use
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
-const supabase = createClient<Database>(supabaseUrl, supabaseServiceKey)
-
 export async function POST(request: NextRequest) {
+  const supabase = await createClient()
+
   try {
     console.log('세금계산서 업로드 시작')
     
