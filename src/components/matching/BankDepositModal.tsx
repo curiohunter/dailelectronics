@@ -266,7 +266,7 @@ export function BankDepositModal({
                             <CommandItem
                               key={customer.id}
                               value={searchableText}
-                              keywords={[customer.company_name, customer.representative_name, ...(customer.alias_names || [])].filter(Boolean)}
+                              keywords={[customer.company_name, customer.representative_name, ...(customer.alias_names || [])].filter((k): k is string => Boolean(k))}
                               onSelect={() => {
                                 setFormData(prev => ({ ...prev, customer_id: customer.id }))
                                 setOpenPopover(false)

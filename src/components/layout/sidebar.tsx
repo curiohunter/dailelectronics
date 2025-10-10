@@ -13,7 +13,9 @@ import {
   Moon,
   Sun,
   UserCog,
-  LogOut
+  LogOut,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react"
 import { useTheme } from "next-themes"
 import { Button } from "@/components/ui/button"
@@ -27,7 +29,12 @@ const navigation = [
   { name: "직원관리", href: "/employees", icon: UserCog },
 ]
 
-export function Sidebar() {
+interface SidebarProps {
+  collapsed?: boolean
+  onToggle?: () => void
+}
+
+export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
   const { theme, setTheme } = useTheme()
@@ -53,12 +60,36 @@ export function Sidebar() {
   }
 
   return (
-    <div className="flex h-full w-64 flex-col bg-gray-900 dark:bg-gray-950">
-      <div className="flex h-16 items-center px-6">
-        <h2 className="text-xl font-semibold text-white">다일전기</h2>
+    <div
+      className={cn(
+        "flex h-full flex-col bg-gray-900 dark:bg-gray-950 transition-all duration-300",
+        collapsed ? "w-16" : "w-50"
+      )}
+    >
+      {/* Header with Toggle Button */}
+      <div className="flex h-16 items-center justify-between px-3">
+        {!collapsed && (
+          <h2 className="text-xl font-semibold text-white">다일전기</h2>
+        )}
+        {onToggle && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onToggle}
+            className="text-gray-300 hover:text-white hover:bg-gray-800"
+            title={collapsed ? "사이드바 펼치기" : "사이드바 접기"}
+          >
+            {collapsed ? (
+              <ChevronRight className="h-5 w-5" />
+            ) : (
+              <ChevronLeft className="h-5 w-5" />
+            )}
+          </Button>
+        )}
       </div>
-      
-      <nav className="flex-1 space-y-1 px-3 py-4">
+
+      {/* Navigation */}
+      <nav className="flex-1 space-y-1 px-2 py-4">
         {navigation.map((item) => {
           const isActive = pathname === item.href
           return (
@@ -69,25 +100,29 @@ export function Sidebar() {
                 "group flex items-center rounded-lg px-3 py-2 text-sm font-medium transition-colors",
                 isActive
                   ? "bg-gray-800 text-white dark:bg-gray-800"
-                  : "text-gray-300 hover:bg-gray-800 hover:text-white dark:hover:bg-gray-800"
+                  : "text-gray-300 hover:bg-gray-800 hover:text-white dark:hover:bg-gray-800",
+                collapsed && "justify-center"
               )}
+              title={collapsed ? item.name : undefined}
             >
               <item.icon
                 className={cn(
-                  "mr-3 h-5 w-5 flex-shrink-0",
+                  "h-5 w-5 flex-shrink-0",
                   isActive
                     ? "text-white"
-                    : "text-gray-400 group-hover:text-white"
+                    : "text-gray-400 group-hover:text-white",
+                  !collapsed && "mr-3"
                 )}
               />
-              {item.name}
+              {!collapsed && item.name}
             </Link>
           )
         })}
       </nav>
-      
+
+      {/* Bottom Actions */}
       <div className="border-t border-gray-800 p-4">
-        <div className="flex justify-center gap-2">
+        <div className={cn("flex gap-2", collapsed ? "flex-col items-center" : "justify-center")}>
           <Button
             variant="ghost"
             size="icon"
@@ -99,7 +134,7 @@ export function Sidebar() {
             <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
             <span className="sr-only">테마 변경</span>
           </Button>
-          
+
           <Button
             variant="ghost"
             size="icon"
