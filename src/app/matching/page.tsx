@@ -139,72 +139,35 @@ export default function MatchingPage() {
   const fetchAllData = async () => {
     setLoading(true)
     try {
-      // Fetch all data in parallel
-      const [
-        { data: customersData },
-        { data: invoicesData },
-        { data: depositsData },
-        { data: invoiceRelationsData },
-        { data: depositRelationsData }
-      ] = await Promise.all([
-        supabase.from('customers').select('*').order('created_at', { ascending: false }),
-        supabase.from('tax_invoices').select('*').order('issue_date', { ascending: false }),
-        supabase.from('bank_deposits').select('*').order('transaction_date', { ascending: false }),
-        supabase.from('customer_tax_invoices').select('*, customer:customers(*), tax_invoice:tax_invoices(*)'),
-        supabase.from('customer_bank_deposits').select('*, customer:customers(*), bank_deposit:bank_deposits(*)')
-      ])
+      console.log('🚀 Fetching data from server API...')
 
-      // Fetch classifications separately with error handling for 406
-      let depositClassificationsData = null
-      try {
-        const { data } = await supabase
-          .from('bank_deposit_classifications')
-          .select(`
-            *,
-            deposit:bank_deposits(
-              transaction_date,
-              transaction_time,
-              deposit_name,
-              deposit_amount
-            )
-          `)
-        depositClassificationsData = data
-      } catch (error) {
-        console.log('Classifications fetch skipped:', error)
+      // Fetch all data from server-side API
+      const response = await fetch('/api/matching/all-data')
+
+      if (!response.ok) {
+        throw new Error(`API request failed: ${response.statusText}`)
       }
 
-      setCustomers(customersData || [])
-      
-      // Process tax invoices with relationship status
-      const processedInvoices = (invoicesData || []).map((invoice: any) => {
-        const relation = invoiceRelationsData?.find((rel: any) => rel.tax_invoice_id === invoice.id) as any
-        return {
-          ...invoice,
-          hasRelation: !!relation?.customer_id,
-          relatedCustomer: relation?.customer || null
-        }
-      })
-      setTaxInvoices(processedInvoices)
+      const result = await response.json()
 
-      // Process bank deposits with relationship status and classifications
-      const processedDeposits = (depositsData || []).map((deposit: any) => {
-        const relation = depositRelationsData?.find((rel: any) => rel.bank_deposit_id === deposit.id) as any
-        const classification = depositClassificationsData?.find((cls: any) => cls.bank_deposit_id === deposit.id) as any
-        return {
-          ...deposit,
-          hasRelation: !!relation?.customer_id,
-          relatedCustomer: relation?.customer || null,
-          classification: classification ? {
-            classification_type: classification.classification_type,
-            classification_detail: classification.classification_detail
-          } : null
-        }
+      if (!result.success) {
+        throw new Error(result.details || 'Failed to fetch data')
+      }
+
+      console.log('✅ Server API response:', {
+        customers: result.data.customers.length,
+        taxInvoices: result.data.taxInvoices.length,
+        bankDeposits: result.data.bankDeposits.length,
+        duration: result.meta.duration
       })
-      setBankDeposits(processedDeposits)
-      
-      setInvoiceRelations(invoiceRelationsData || [])
-      setDepositRelations(depositRelationsData || [])
-      setOtherDeposits(depositClassificationsData || [])
+
+      // Set data directly from API response (already processed on server)
+      setCustomers(result.data.customers || [])
+      setTaxInvoices(result.data.taxInvoices || [])
+      setBankDeposits(result.data.bankDeposits || [])
+      setInvoiceRelations(result.data.invoiceRelations || [])
+      setDepositRelations(result.data.depositRelations || [])
+      setOtherDeposits(result.data.otherDeposits || [])
     } catch (error) {
       console.error('Error fetching data:', error)
       toast({

@@ -49,7 +49,10 @@
 - **세금계산서 업로드**: CSV/Excel 형식 지원
 - **은행 입금내역 업로드**: 신한은행 등 주요 은행 형식 지원
 - **자동 거래처 생성**: 신규 거래처 자동 등록
-- **중복 방지**: 승인번호 기반 중복 체크
+- **중복 방지**: PostgreSQL 유니크 제약으로 DB 레벨 중복 자동 방지
+  - 세금계산서: 승인번호 (`approval_number`)
+  - 입금내역: 복합 키 (`transaction_date`, `transaction_time`, `deposit_amount`, `deposit_name`)
+- **upsert 방식**: 동일 데이터 업로드 시 자동 스킵, 성능 최적화
 
 ### 4. 스마트 매칭 시스템
 - **별칭 기반 자동 매칭**: alias_names 배열로 다양한 입금자명 인식
@@ -115,11 +118,12 @@ npm run dev
   - total_amount (총액)
   - ❌ customer_id 없음 (관계 테이블로 관리)
   
-- **bank_deposits**: 입금내역 원본  
+- **bank_deposits**: 입금내역 원본
   - 은행 데이터 그대로 보존
   - deposit_name (입금자명)
   - deposit_amount (입금액)
   - ❌ customer_id 없음 (관계 테이블로 관리)
+  - ✅ UNIQUE 제약: (transaction_date, transaction_time, deposit_amount, deposit_name)
 
 #### 관계 테이블 (연결 관리)
 - **customer_tax_invoices**: 거래처 ↔ 세금계산서 연결
@@ -159,12 +163,13 @@ npm run dev
   - 거래처 메모 기능
   - 전화번호 즉시 확인
 
-### 데이터 관리 센터 (`/matching`) 
+### 데이터 관리 센터 (`/matching`)
 - **파일 업로드**
-  - 세금계산서 CSV 업로드
-  - 입금내역 Excel 업로드
+  - 세금계산서 CSV 업로드 (upsert 방식)
+  - 입금내역 Excel 업로드 (upsert 방식)
   - 자동 관계 생성
-  
+  - 중복 데이터 자동 스킵 (DB 제약 조건)
+
 - **통합 CRUD (4개 탭)**
   - 고객사 탭: 회사 정보 + 별칭 관리
   - 세금계산서 탭: 원본 데이터 + 연결 상태 + CRUD 기능
@@ -217,6 +222,8 @@ npm run dev
 - 대표자명은 자동으로 별칭에 포함됩니다
 - 30일 경과 미수금은 즉시 확인하여 조치하세요
 - 정기적인 데이터 백업을 권장합니다
+- 동일 파일 중복 업로드 시 자동으로 스킵됩니다 (DB 제약 조건)
+- 2024-10-11: 입금내역 중복 제거 완료 (6,238건 → 4,444건)
 
 ## 📞 지원
 

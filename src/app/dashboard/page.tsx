@@ -57,17 +57,36 @@ export default function DashboardPage() {
     try {
       setLoading(true)
 
-      // Create authenticated Supabase client
-      const supabase = createClient()
+      console.log('🚀 Dashboard fetching data from server API...')
 
-      // Fetch all necessary data
+      // Fetch all data from server-side API
+      const response = await fetch('/api/matching/all-data')
+
+      if (!response.ok) {
+        throw new Error(`API request failed: ${response.statusText}`)
+      }
+
+      const result = await response.json()
+
+      if (!result.success) {
+        throw new Error(result.details || 'Failed to fetch data')
+      }
+
+      console.log('✅ Dashboard API response:', {
+        customers: result.data.customers.length,
+        taxInvoices: result.data.taxInvoices.length,
+        bankDeposits: result.data.bankDeposits.length,
+        duration: result.meta.duration
+      })
+
+      // Extract data from API response
       interface Customer {
         id: string
         company_name: string
         phone: string | null
         notes: string | null
       }
-      
+
       interface Invoice {
         id: string
         total_amount: number
@@ -75,7 +94,7 @@ export default function DashboardPage() {
         issue_date: string
         is_matched: boolean | null
       }
-      
+
       interface Deposit {
         id: string
         deposit_amount: number
@@ -83,38 +102,23 @@ export default function DashboardPage() {
         transaction_date: string
         is_matched: boolean | null
       }
-      
+
       interface InvoiceRelation {
         tax_invoice_id: string
         customer_id: string | null
       }
-      
+
       interface DepositRelation {
         bank_deposit_id: string
         customer_id: string | null
       }
-      
-      const [
-        { data: customersData, error: customersError },
-        { data: invoicesData, error: invoicesError },
-        { data: depositsData, error: depositsError },
-        { data: invoiceRelationsData, error: invoiceRelationsError },
-        { data: depositRelationsData, error: depositRelationsError },
-        { data: classificationsData, error: classificationsError }
-      ] = await Promise.all([
-        supabase.from('customers').select('*'),
-        supabase.from('tax_invoices').select('*'),
-        supabase.from('bank_deposits').select('*'),
-        supabase.from('customer_tax_invoices').select('*'),
-        supabase.from('customer_bank_deposits').select('*'),
-        supabase.from('bank_deposit_classifications').select('*')
-      ])
-      
-      const customers = customersData as Customer[] | null
-      const invoices = invoicesData as Invoice[] | null
-      const deposits = depositsData as Deposit[] | null
-      const invoiceRelations = invoiceRelationsData as InvoiceRelation[] | null
-      const depositRelations = depositRelationsData as DepositRelation[] | null
+
+      const customers = result.data.customers as Customer[] | null
+      const invoices = result.data.taxInvoices as Invoice[] | null
+      const deposits = result.data.bankDeposits as Deposit[] | null
+      const invoiceRelations = result.data.invoiceRelations as InvoiceRelation[] | null
+      const depositRelations = result.data.depositRelations as DepositRelation[] | null
+      const classificationsData = result.data.otherDeposits
 
 
       // Calculate totals per customer
@@ -252,9 +256,6 @@ export default function DashboardPage() {
         external: { count: 0, amount: 0 }
       }
 
-      // Track customers who have other deposits
-      const customersWithOtherDeposits = new Set<string>()
-
       if (classificationsData && classificationsData.length > 0) {
         classificationsData.forEach((classification: any) => {
           // Find the deposit from deposits data
@@ -268,12 +269,6 @@ export default function DashboardPage() {
               // Convert string to number (Supabase returns decimal as string)
               const amount = typeof deposit.deposit_amount === 'string' ? parseFloat(deposit.deposit_amount) : deposit.deposit_amount
 
-              // Find the customer associated with this deposit
-              const depositRelation = depositRelations?.find(dr => dr.bank_deposit_id === classification.bank_deposit_id)
-              if (depositRelation?.customer_id) {
-                customersWithOtherDeposits.add(depositRelation.customer_id)
-              }
-
               if (classification.classification_type === 'internal') {
                 otherDeposits.internal.count++
                 otherDeposits.internal.amount += amount
@@ -285,14 +280,6 @@ export default function DashboardPage() {
           }
         })
       }
-
-      // Mark customers who have other deposits
-      customersWithOtherDeposits.forEach(customerId => {
-        const customer = customerMap.get(customerId)
-        if (customer) {
-          customer.hasOtherDeposits = true
-        }
-      })
 
       setSummary(prev => ({
         ...prev,

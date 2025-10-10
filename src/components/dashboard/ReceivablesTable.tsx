@@ -32,7 +32,7 @@ interface ReceivablesTableProps {
 }
 
 export function ReceivablesTable({ customers, loading, onCustomerClick }: ReceivablesTableProps) {
-  const [filterStatus, setFilterStatus] = useState<'all' | 'complete' | 'unpaid' | '30days' | '60days' | '90days' | 'overpaid' | 'other'>('all')
+  const [filterStatus, setFilterStatus] = useState<'all' | 'complete' | 'unpaid' | '30days' | '60days' | '90days' | 'overpaid'>('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [sortConfig, setSortConfig] = useState<{
     key: 'companyName' | 'invoiceAmount' | 'depositAmount' | 'balance' | 'overdueDays' | 'latestInvoiceDate' | 'latestDepositDate'
@@ -60,8 +60,6 @@ export function ReceivablesTable({ customers, loading, onCustomerClick }: Receiv
       filtered = filtered.filter(c => c.status === 'unpaid' && c.overdueDays && c.overdueDays >= 90)
     } else if (filterStatus === 'overpaid') {
       filtered = filtered.filter(c => c.status === 'overpaid')
-    } else if (filterStatus === 'other') {
-      filtered = filtered.filter(c => c.hasOtherDeposits === true)
     }
 
     // Apply search filter
@@ -250,14 +248,6 @@ export function ReceivablesTable({ customers, loading, onCustomerClick }: Receiv
             className={filterStatus === 'overpaid' ? 'bg-blue-600 hover:bg-blue-700' : ''}
           >
             🔵 과납 {customers.filter(c => c.status === 'overpaid').length}개
-          </Button>
-          <Button
-            variant={filterStatus === 'other' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setFilterStatus('other')}
-            className={filterStatus === 'other' ? 'bg-purple-600 hover:bg-purple-700' : ''}
-          >
-            💰 기타입금 {customers.filter(c => c.hasOtherDeposits).length}개
           </Button>
         </div>
 

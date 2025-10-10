@@ -34,62 +34,67 @@ export async function POST(request: NextRequest) {
       const result = await FileParser.parseTaxInvoiceFile(file)
       invoices = result.invoices
       customers = result.customers
-      console.log(`파싱 완료: ${invoices.length}개 세금계산서, ${customers.length}개 거래처`)
+      console.log(`🚀 파싱 완료: ${invoices.length}개 세금계산서, ${customers.length}개 거래처`)
     } catch (parseError) {
       console.error('파일 파싱 오류:', parseError)
       return NextResponse.json(
-        { 
+        {
           error: '파일 파싱 중 오류가 발생했습니다.',
           details: parseError instanceof Error ? parseError.message : '알 수 없는 오류'
         },
         { status: 400 }
       )
     }
-    
-    // 고객 정보 먼저 저장/업데이트
+
+    // ===== 1단계: 사전 데이터 로드 (1회만 실행) =====
+    console.log('📥 사전 데이터 로드 중...')
+
+    // 전체 고객 목록 조회 (1회)
+    interface ExistingCustomer {
+      id: string
+      company_name: string
+      address: string | null
+      business_number: string | null
+      representative_name: string | null
+      alias_names: string[] | null
+    }
+
+    const { data: allExistingCustomers } = await supabase
+      .from('customers')
+      .select('id, company_name, address, business_number, representative_name, alias_names')
+      .returns<ExistingCustomer[]>()
+
+    // 사업자번호로 빠른 검색을 위한 Map
+    const existingCustomersByBizNum = new Map<string, ExistingCustomer>()
+    allExistingCustomers?.forEach(c => {
+      if (c.business_number) {
+        existingCustomersByBizNum.set(c.business_number, c)
+      }
+    })
+
+    console.log(`✅ 기존 고객 로드: ${allExistingCustomers?.length || 0}명`)
+
+    // ===== 2단계: 고객 정보 배치 처리 =====
     const customerMap = new Map<string, string>() // business_number -> customer_id
+    const customersToInsert: any[] = []
+    const customersToUpdate: { id: string, data: CustomerUpdate }[] = []
     let newCustomerCount = 0
     let updatedCustomerCount = 0
-    
+
     for (const customer of customers) {
-      // 기존 고객 확인
-      interface ExistingCustomer {
-        id: string
-        company_name: string
-        address: string | null
-        ceo_name: string | null
-        business_type: string | null
-        business_category: string | null
-      }
-      
-      const { data: existingCustomer } = await (supabase as any)
-        .from('customers')
-        .select('id, company_name, address, ceo_name, business_type, business_category')
-        .eq('business_number', customer.business_number!)
-        .single() as { data: ExistingCustomer | null }
-      
+      const existingCustomer = customer.business_number
+        ? existingCustomersByBizNum.get(customer.business_number)
+        : null
+
       if (existingCustomer) {
-        // 기존 고객 정보와 비교하여 변경사항이 있으면 업데이트
-        // Customer from parser only has company_name, address, representative_name
-        const hasChanges = 
+        // 변경사항 확인
+        const hasChanges =
           existingCustomer.company_name !== customer.company_name ||
           existingCustomer.address !== customer.address
-        
-        // 대표자명이 변경되었는지 확인
-        interface CurrentCustomerData {
-          representative_name: string | null
-          alias_names: string[] | null
-        }
-        
-        const { data: currentData } = await (supabase as any)
-          .from('customers')
-          .select('representative_name, alias_names')
-          .eq('id', existingCustomer.id)
-          .single() as { data: CurrentCustomerData | null }
-        
+
         let updateData: CustomerUpdate = {}
         let needsUpdate = false
-        
+
         if (hasChanges) {
           updateData = {
             company_name: customer.company_name,
@@ -98,43 +103,32 @@ export async function POST(request: NextRequest) {
           }
           needsUpdate = true
         }
-        
-        // 대표자명이 변경되었거나 새로 추가된 경우
-        if (customer.representative_name && 
-            (currentData?.representative_name !== customer.representative_name || 
-             !currentData?.representative_name)) {
+
+        // 대표자명 변경 확인
+        if (customer.representative_name &&
+            existingCustomer.representative_name !== customer.representative_name) {
           updateData.representative_name = customer.representative_name
-          
+
           // 별칭 배열에 새 대표자명 추가
-          let updatedAliases = currentData?.alias_names || []
+          let updatedAliases = existingCustomer.alias_names || []
           if (!updatedAliases.includes(customer.representative_name)) {
             updatedAliases = [customer.representative_name, ...updatedAliases]
             updateData.alias_names = updatedAliases
           }
           needsUpdate = true
         }
-        
+
         if (needsUpdate) {
-          // 변경된 정보 업데이트
-          const { error: updateError } = await (supabase as any)
-            .from('customers')
-            .update(updateData)
-            .eq('id', existingCustomer.id)
-          
-          if (updateError) {
-            console.error('고객 정보 업데이트 오류:', updateError)
-          } else {
-            updatedCustomerCount++
-            console.log(`고객 정보 업데이트: ${customer.company_name} (${customer.business_number})`)
-          }
+          customersToUpdate.push({ id: existingCustomer.id, data: updateData })
+          console.log(`업데이트 예정: ${customer.company_name} (${customer.business_number})`)
         }
-        
+
         customerMap.set(customer.business_number!, existingCustomer.id)
       } else {
-        // 새 고객 생성 시 대표자명을 별칭에 자동 포함
+        // 새 고객 생성 준비
         const customerToInsert = { ...customer }
-        
-        // 대표자명이 있고 별칭 배열에 없으면 추가
+
+        // 대표자명을 별칭에 자동 포함
         if (customer.representative_name) {
           if (!customerToInsert.alias_names) {
             customerToInsert.alias_names = []
@@ -143,125 +137,141 @@ export async function POST(request: NextRequest) {
             customerToInsert.alias_names = [customer.representative_name, ...customerToInsert.alias_names]
           }
         }
-        
-        const { data: newCustomer, error } = await (supabase as any)
-          .from('customers')
-          .insert(customerToInsert)
-          .select('id, business_number')
-          .single()
-        
-        if (error) {
-          console.error('고객 생성 오류:', error)
-          continue
-        }
-        
-        if (newCustomer && newCustomer.business_number) {
-          customerMap.set(newCustomer.business_number, newCustomer.id)
-          newCustomerCount++
-          console.log(`새 고객 생성: ${customer.company_name} (${customer.business_number})`)
-        }
+
+        customersToInsert.push(customerToInsert)
       }
     }
+
+    // 고객 업데이트 배치 실행
+    for (const { id, data } of customersToUpdate) {
+      const { error } = await (supabase as any)
+        .from('customers')
+        .update(data)
+        .eq('id', id)
+
+      if (!error) {
+        updatedCustomerCount++
+      }
+    }
+
+    // 고객 삽입 배치 실행
+    if (customersToInsert.length > 0) {
+      const { data: newCustomers, error } = await (supabase as any)
+        .from('customers')
+        .insert(customersToInsert)
+        .select('id, business_number')
+
+      if (!error && newCustomers) {
+        newCustomers.forEach((c: any) => {
+          if (c.business_number) {
+            customerMap.set(c.business_number, c.id)
+            newCustomerCount++
+          }
+        })
+      }
+    }
+
+    console.log(`✅ 고객 처리 완료: 신규 ${newCustomerCount}명, 업데이트 ${updatedCustomerCount}명`)
     
-    // 세금계산서 저장
+    // ===== 3단계: 세금계산서 upsert 처리 =====
+    console.log('📄 세금계산서 처리 중...')
+
+    // customer_id 필드 제거 및 데이터 준비
+    const invoicesToUpsert = invoices.map((invoice: any) => {
+      const { customer_id, ...invoiceData } = invoice
+      return invoiceData
+    })
+
+    const invoiceBuyerNames = invoices.map((inv: any) => inv.buyer_company_name || '')
+
+    console.log(`📊 처리 대상: ${invoicesToUpsert.length}건`)
+
+    // upsert로 한 번에 처리 (중복은 DB가 자동 처리)
+    const { data: upsertedInvoices, error } = await (supabase as any)
+      .from('tax_invoices')
+      .upsert(invoicesToUpsert, {
+        onConflict: 'approval_number',
+        ignoreDuplicates: true
+      })
+      .select('id, approval_number')
+
     let successCount = 0
     let skipCount = 0
     let errorCount = 0
-    
-    for (const invoice of invoices) {
-      // customer_id 필드 제거 (관계 테이블로 관리)
-      const { customer_id, ...invoiceData } = invoice as any
-      
-      // 중복 확인 (승인번호 기준)
-      const { data: existing } = await (supabase as any)
-        .from('tax_invoices')
-        .select('id')
-        .eq('approval_number', invoiceData.approval_number!)
-        .single()
-      
-      if (existing) {
-        skipCount++
-        console.log(`중복 건너뜀: 승인번호 ${invoiceData.approval_number}`)
-        continue
+
+    if (error) {
+      console.error('❌ 세금계산서 upsert 오류:', error)
+      errorCount = invoicesToUpsert.length
+    } else {
+      successCount = upsertedInvoices?.length || 0
+      skipCount = invoicesToUpsert.length - successCount
+      console.log(`✅ 세금계산서 저장 완료: ${successCount}건 신규, ${skipCount}건 중복`)
+    }
+
+    const insertedInvoices = upsertedInvoices || []
+
+    // ===== 4단계: 관계 테이블 처리 =====
+    if (insertedInvoices.length > 0) {
+      const relationsToInsert: any[] = []
+
+      // 고객 매칭을 위한 정규화 함수
+      const normalizeCompanyName = (name: string | null | undefined): string => {
+        return (name || '').trim().toLowerCase()
       }
-      
-      // 세금계산서 저장
-      const { data: newInvoice, error } = await (supabase as any)
-        .from('tax_invoices')
-        .insert(invoiceData)
-        .select('id')
-        .single()
-      
-      if (error) {
-        console.error('세금계산서 저장 오류:', error)
-        errorCount++
-        continue
-      }
-      
-      // customer_tax_invoices 관계 생성
-      if (newInvoice) {
-        // buyer_company_name으로 고객 찾기
-        // 먼저 정확한 company_name 매칭 시도
-        let customer = null;
 
-        if (invoiceData.buyer_company_name) {
-          // 회사명 정규화 (공백 제거, 소문자 변환)
-          const normalizedBuyerName = invoiceData.buyer_company_name.trim().toLowerCase();
-
-          // 모든 고객 조회 후 JavaScript에서 매칭
-          const { data: allCustomers } = await (supabase as any)
-            .from('customers')
-            .select('id, company_name, alias_names')
-
-          if (allCustomers && allCustomers.length > 0) {
-            // 정확한 company_name 매칭 또는 alias_names 매칭
-            customer = allCustomers.find((c: any) => {
-              // company_name 정규화 후 비교
-              if (c.company_name) {
-                const normalizedCompanyName = c.company_name.trim().toLowerCase();
-                if (normalizedCompanyName === normalizedBuyerName) {
-                  return true;
-                }
-              }
-
-              // alias_names 배열 검사
-              if (c.alias_names && Array.isArray(c.alias_names)) {
-                return c.alias_names.some((alias: string) =>
-                  alias.trim().toLowerCase() === normalizedBuyerName
-                );
-              }
-
-              return false;
-            });
-          }
-
-          // 사업자번호로도 매칭 시도 (invoiceData에 buyer_business_number가 있는 경우)
-          if (!customer && invoiceData.buyer_business_number) {
-            const { data: customerByBizNum } = await (supabase as any)
-              .from('customers')
-              .select('id')
-              .eq('business_number', invoiceData.buyer_business_number)
-              .single()
-
-            customer = customerByBizNum;
-          }
+      // 회사명과 별칭으로 빠른 검색을 위한 Map 생성
+      const customersByName = new Map<string, string>() // normalized_name -> customer_id
+      allExistingCustomers?.forEach(c => {
+        // 회사명 매핑
+        if (c.company_name) {
+          customersByName.set(normalizeCompanyName(c.company_name), c.id)
         }
+        // 별칭 매핑
+        if (c.alias_names && Array.isArray(c.alias_names)) {
+          c.alias_names.forEach(alias => {
+            customersByName.set(normalizeCompanyName(alias), c.id)
+          })
+        }
+      })
 
-        // 관계 테이블에 레코드 생성 (customer_id는 NULL 허용)
+      // approval_number로 원본 인덱스 찾기
+      const approvalToIndex = new Map<string, number>()
+      invoicesToUpsert.forEach((inv: any, idx: number) => {
+        approvalToIndex.set(inv.approval_number, idx)
+      })
+
+      for (const invoice of insertedInvoices) {
+        const index = approvalToIndex.get(invoice.approval_number) ?? -1
+        if (index === -1) continue
+
+        const buyerName = invoiceBuyerNames[index]
+        const normalizedBuyerName = normalizeCompanyName(buyerName)
+
+        // 고객 매칭 (메모리에서)
+        const customerId = customersByName.get(normalizedBuyerName) || null
+
+        relationsToInsert.push({
+          customer_id: customerId,
+          tax_invoice_id: invoice.id
+        })
+
+        console.log(`세금계산서 연결: ${buyerName} -> ${customerId ? '고객 찾음' : '고객 없음'}`)
+      }
+
+      // 관계 테이블 upsert (중복 방지)
+      if (relationsToInsert.length > 0) {
         const { error: relationError } = await (supabase as any)
           .from('customer_tax_invoices')
-          .insert({
-            customer_id: customer?.id || null,
-            tax_invoice_id: newInvoice.id
+          .upsert(relationsToInsert, {
+            onConflict: 'tax_invoice_id',
+            ignoreDuplicates: true
           })
 
         if (relationError) {
-          console.error('관계 생성 오류:', relationError)
+          console.error('❌ 관계 생성 오류:', relationError)
         } else {
-          console.log(`세금계산서 연결: ${invoiceData.buyer_company_name} -> ${customer ? '고객 찾음' : '고객 없음'}`)
+          console.log(`✅ 관계 테이블 저장 완료: ${relationsToInsert.length}건`)
         }
-
-        successCount++
       }
     }
     
