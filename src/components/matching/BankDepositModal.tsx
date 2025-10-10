@@ -31,6 +31,8 @@ import { cn } from "@/lib/utils"
 interface Customer {
   id: string
   company_name: string
+  representative_name?: string | null
+  alias_names?: string[] | null
 }
 
 interface BankDeposit {
@@ -75,11 +77,32 @@ export function BankDepositModal({
     a.company_name.localeCompare(b.company_name, 'ko')
   )
 
-  // 고객사 검색 필터링
+  // 고객사 검색 필터링 (회사명 + 대표자명 + 별칭)
   const filteredCustomers = sortedCustomers.filter(customer => {
     if (!customerSearchQuery) return true
-    const query = customerSearchQuery.toLowerCase()
-    return customer.company_name.toLowerCase().includes(query)
+    const query = customerSearchQuery.toLowerCase().trim()
+    const queryWithoutSpaces = query.replace(/\s+/g, '') // 공백 제거
+
+    // 1. 회사명 검색
+    if (customer.company_name.toLowerCase().includes(query)) return true
+
+    // 2. 대표자명 검색 (공백 포함/제거 둘 다 지원)
+    if (customer.representative_name) {
+      const repName = customer.representative_name.toLowerCase()
+      const repNameWithoutSpaces = repName.replace(/\s+/g, '')
+      if (repName.includes(query) || repNameWithoutSpaces.includes(queryWithoutSpaces)) {
+        return true
+      }
+    }
+
+    // 3. 별칭 검색 (배열, 공백 포함/제거 둘 다 지원)
+    if (customer.alias_names?.some(alias => {
+      const aliasLower = alias.toLowerCase()
+      const aliasWithoutSpaces = aliasLower.replace(/\s+/g, '')
+      return aliasLower.includes(query) || aliasWithoutSpaces.includes(queryWithoutSpaces)
+    })) return true
+
+    return false
   })
 
   useEffect(() => {
@@ -189,7 +212,13 @@ export function BankDepositModal({
                     className="w-full justify-between"
                   >
                     {formData.customer_id
-                      ? customers.find((customer) => customer.id === formData.customer_id)?.company_name
+                      ? (() => {
+                          const selectedCustomer = customers.find((customer) => customer.id === formData.customer_id)
+                          if (!selectedCustomer) return "연결업체 선택 (선택사항)"
+                          return selectedCustomer.representative_name
+                            ? `${selectedCustomer.company_name} (${selectedCustomer.representative_name})`
+                            : selectedCustomer.company_name
+                        })()
                       : "연결업체 선택 (선택사항)"}
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
@@ -197,7 +226,7 @@ export function BankDepositModal({
                 <PopoverContent className="w-[380px] p-0" align="start">
                   <Command>
                     <CommandInput
-                      placeholder="고객사명 검색..."
+                      placeholder="고객사명, 대표자명 또는 별칭으로 검색..."
                       value={customerSearchQuery}
                       onValueChange={setCustomerSearchQuery}
                     />
@@ -225,33 +254,45 @@ export function BankDepositModal({
                             연결 해제
                           </CommandItem>
                         )}
-                        {filteredCustomers.map((customer) => (
-                          <CommandItem
-                            key={customer.id}
-                            value={customer.company_name}
-                            onSelect={() => {
-                              setFormData(prev => ({ ...prev, customer_id: customer.id }))
-                              setOpenPopover(false)
-                            }}
-                            className="cursor-pointer"
-                            onMouseDown={(e) => {
-                              e.preventDefault()
-                              e.stopPropagation()
-                            }}
-                            onClick={() => {
-                              setFormData(prev => ({ ...prev, customer_id: customer.id }))
-                              setOpenPopover(false)
-                            }}
-                          >
-                            <Check
-                              className={cn(
-                                "mr-2 h-4 w-4",
-                                formData.customer_id === customer.id ? "opacity-100" : "opacity-0"
-                              )}
-                            />
-                            {customer.company_name}
-                          </CommandItem>
-                        ))}
+                        {filteredCustomers.map((customer) => {
+                          // 검색을 위한 통합 문자열 생성 (회사명 + 대표자명 + 별칭)
+                          const searchableText = [
+                            customer.company_name,
+                            customer.representative_name,
+                            ...(customer.alias_names || [])
+                          ].filter(Boolean).join(' ')
+
+                          return (
+                            <CommandItem
+                              key={customer.id}
+                              value={searchableText}
+                              keywords={[customer.company_name, customer.representative_name, ...(customer.alias_names || [])].filter(Boolean)}
+                              onSelect={() => {
+                                setFormData(prev => ({ ...prev, customer_id: customer.id }))
+                                setOpenPopover(false)
+                              }}
+                              className="cursor-pointer"
+                              onMouseDown={(e) => {
+                                e.preventDefault()
+                                e.stopPropagation()
+                              }}
+                              onClick={() => {
+                                setFormData(prev => ({ ...prev, customer_id: customer.id }))
+                                setOpenPopover(false)
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  formData.customer_id === customer.id ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              {customer.representative_name
+                                ? `${customer.company_name} (${customer.representative_name})`
+                                : customer.company_name}
+                            </CommandItem>
+                          )
+                        })}
                       </CommandGroup>
                     </CommandList>
                   </Command>

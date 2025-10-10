@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/hooks/use-toast"
 import { createClient } from "@/lib/supabase/client"
+import { useAllData, useInvalidateAllData, useUploadTaxInvoice, useUploadBankDeposit } from "@/hooks/use-data"
 import { Plus } from "lucide-react"
 
 interface Customer {
@@ -100,19 +101,24 @@ interface OtherDeposit {
 export default function MatchingPage() {
   const supabase = createClient()
   const [activeTab, setActiveTab] = useState("customers")
-  const [loading, setLoading] = useState(false)
 
-  // Data states
-  const [customers, setCustomers] = useState<Customer[]>([])
-  const [taxInvoices, setTaxInvoices] = useState<TaxInvoice[]>([])
-  const [bankDeposits, setBankDeposits] = useState<BankDeposit[]>([])
-  const [invoiceRelations, setInvoiceRelations] = useState<CustomerTaxInvoice[]>([])
-  const [depositRelations, setDepositRelations] = useState<CustomerBankDeposit[]>([])
-  const [otherDeposits, setOtherDeposits] = useState<OtherDeposit[]>([])
-  
+  // React Query로 데이터 가져오기 (캐시 활용)
+  const { data: apiData, isLoading, isError } = useAllData()
+  const invalidateAllData = useInvalidateAllData()
+
+  // Mutation hooks for file uploads
+  const uploadTaxInvoiceMutation = useUploadTaxInvoice()
+  const uploadBankDepositMutation = useUploadBankDeposit()
+
+  // Extract data from API response (캐시에서 즉시 사용)
+  const customers = apiData?.data?.customers || []
+  const taxInvoices = apiData?.data?.taxInvoices || []
+  const bankDeposits = apiData?.data?.bankDeposits || []
+  const invoiceRelations = apiData?.data?.invoiceRelations || []
+  const depositRelations = apiData?.data?.depositRelations || []
+  const otherDeposits = apiData?.data?.otherDeposits || []
+
   // File upload states
-  const [uploadingInvoice, setUploadingInvoice] = useState(false)
-  const [uploadingDeposit, setUploadingDeposit] = useState(false)
   const [invoiceFile, setInvoiceFile] = useState<File | null>(null)
   const [depositFile, setDepositFile] = useState<File | null>(null)
   
@@ -132,126 +138,17 @@ export default function MatchingPage() {
   
   const { toast } = useToast()
 
-  useEffect(() => {
-    fetchAllData()
-  }, [])
-
-  const fetchAllData = async () => {
-    setLoading(true)
-    try {
-      console.log('🚀 Fetching data from server API...')
-
-      // Fetch all data from server-side API
-      const response = await fetch('/api/matching/all-data')
-
-      if (!response.ok) {
-        throw new Error(`API request failed: ${response.statusText}`)
-      }
-
-      const result = await response.json()
-
-      if (!result.success) {
-        throw new Error(result.details || 'Failed to fetch data')
-      }
-
-      console.log('✅ Server API response:', {
-        customers: result.data.customers.length,
-        taxInvoices: result.data.taxInvoices.length,
-        bankDeposits: result.data.bankDeposits.length,
-        duration: result.meta.duration
-      })
-
-      // Set data directly from API response (already processed on server)
-      setCustomers(result.data.customers || [])
-      setTaxInvoices(result.data.taxInvoices || [])
-      setBankDeposits(result.data.bankDeposits || [])
-      setInvoiceRelations(result.data.invoiceRelations || [])
-      setDepositRelations(result.data.depositRelations || [])
-      setOtherDeposits(result.data.otherDeposits || [])
-    } catch (error) {
-      console.error('Error fetching data:', error)
-      toast({
-        title: "오류",
-        description: "데이터를 불러오는데 실패했습니다.",
-        variant: "destructive"
-      })
-    } finally {
-      setLoading(false)
-    }
-  }
-
+  // File upload handlers using React Query mutations
   const handleInvoiceUpload = async () => {
     if (!invoiceFile) return
-
-    setUploadingInvoice(true)
-    const formData = new FormData()
-    formData.append('file', invoiceFile)
-
-    try {
-      const response = await fetch('/api/upload/tax-invoice', {
-        method: 'POST',
-        body: formData,
-      })
-
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Upload failed')
-      }
-
-      toast({
-        title: "업로드 성공",
-        description: result.message || `${result.data?.invoices?.saved || 0}개의 세금계산서가 업로드되었습니다.`,
-      })
-
-      setInvoiceFile(null)
-      fetchAllData()
-    } catch (error: any) {
-      toast({
-        title: "업로드 실패",
-        description: error.message || "파일 업로드 중 오류가 발생했습니다.",
-        variant: "destructive"
-      })
-    } finally {
-      setUploadingInvoice(false)
-    }
+    await uploadTaxInvoiceMutation.mutateAsync(invoiceFile)
+    setInvoiceFile(null)
   }
 
   const handleDepositUpload = async () => {
     if (!depositFile) return
-
-    setUploadingDeposit(true)
-    const formData = new FormData()
-    formData.append('file', depositFile)
-
-    try {
-      const response = await fetch('/api/upload/bank-deposit', {
-        method: 'POST',
-        body: formData,
-      })
-
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Upload failed')
-      }
-
-      toast({
-        title: "업로드 성공",
-        description: result.message || `${result.data?.deposits?.saved || 0}개의 입금내역이 업로드되었습니다.`,
-      })
-
-      setDepositFile(null)
-      fetchAllData()
-    } catch (error: any) {
-      toast({
-        title: "업로드 실패",
-        description: error.message || "파일 업로드 중 오류가 발생했습니다.",
-        variant: "destructive"
-      })
-    } finally {
-      setUploadingDeposit(false)
-    }
+    await uploadBankDepositMutation.mutateAsync(depositFile)
+    setDepositFile(null)
   }
 
   const handleConnectInvoice = async (invoiceId: string, customerId: string) => {
@@ -292,19 +189,8 @@ export default function MatchingPage() {
         description: "세금계산서가 고객사와 연결되었습니다.",
       })
 
-      // 로컬 상태만 업데이트 (새로고침 없이)
-      setTaxInvoices(prevInvoices =>
-        prevInvoices.map(inv => {
-          if (inv.id === invoiceId) {
-            return {
-              ...inv,
-              hasRelation: true,
-              relatedCustomer: customer || null
-            }
-          }
-          return inv
-        })
-      )
+      // 캐시 무효화하여 최신 데이터 가져오기
+      invalidateAllData()
     } catch (error) {
       console.error('Error connecting invoice:', error)
       toast({
@@ -438,33 +324,8 @@ export default function MatchingPage() {
         description: `입금내역이 ${customer.company_name}과 연결되었습니다. 같은 입금명의 다른 내역도 자동으로 연결됩니다.`,
       })
 
-      // 로컬 상태만 업데이트 (새로고침 없이)
-      setBankDeposits(prevDeposits =>
-        prevDeposits.map(dep => {
-          // 현재 연결한 입금내역과 같은 입금명을 가진 모든 항목 업데이트
-          if (dep.deposit_name === deposit.deposit_name) {
-            return {
-              ...dep,
-              hasRelation: true,
-              relatedCustomer: customer
-            }
-          }
-          return dep
-        })
-      )
-
-      // 고객사 별칭 정보도 로컬 업데이트
-      setCustomers(prevCustomers =>
-        prevCustomers.map(cust => {
-          if (cust.id === customerId) {
-            return {
-              ...cust,
-              alias_names: updatedAliases
-            }
-          }
-          return cust
-        })
-      )
+      // 캐시 무효화하여 최신 데이터 가져오기
+      invalidateAllData()
     } catch (error) {
       console.error('Error connecting deposit:', error)
       toast({
@@ -514,28 +375,15 @@ export default function MatchingPage() {
         if (error) throw error
       }
 
-      // 2. 로컬 상태 업데이트
-      setBankDeposits(prevDeposits =>
-        prevDeposits.map(dep => {
-          if (dep.id === depositId) {
-            return {
-              ...dep,
-              classification: {
-                classification_type: type,
-                classification_detail: detail
-              }
-            }
-          }
-          return dep
-        })
-      )
-
       toast({
         title: "분류 성공",
         description: type === 'internal'
           ? `입금내역이 내부 경영으로 분류되었습니다.`
           : `입금내역이 외부 기타로 분류되었습니다.`,
       })
+
+      // 캐시 무효화하여 최신 데이터 가져오기
+      invalidateAllData()
     } catch (error) {
       console.error('Error classifying deposit:', error)
       toast({
@@ -573,7 +421,7 @@ export default function MatchingPage() {
         title: "삭제 성공",
         description: "고객사가 삭제되었습니다.",
       })
-      fetchAllData()
+      invalidateAllData()
     } catch (error) {
       console.error('Error deleting customer:', error)
       toast({
@@ -654,7 +502,7 @@ export default function MatchingPage() {
       }
 
       setIsCustomerModalOpen(false)
-      fetchAllData()
+      invalidateAllData()
     } catch (error) {
       console.error('Error saving customer:', error)
       toast({
@@ -693,7 +541,7 @@ export default function MatchingPage() {
         title: "삭제 성공",
         description: "세금계산서가 삭제되었습니다.",
       })
-      fetchAllData()
+      invalidateAllData()
     } catch (error) {
       console.error('Error deleting invoice:', error)
       toast({
@@ -734,7 +582,7 @@ export default function MatchingPage() {
       }
 
       setIsInvoiceModalOpen(false)
-      fetchAllData()
+      invalidateAllData()
     } catch (error) {
       console.error('Error saving invoice:', error)
       toast({
@@ -773,7 +621,7 @@ export default function MatchingPage() {
         title: "삭제 성공",
         description: "입금내역이 삭제되었습니다.",
       })
-      fetchAllData()
+      invalidateAllData()
     } catch (error) {
       console.error('Error deleting deposit:', error)
       toast({
@@ -912,7 +760,7 @@ export default function MatchingPage() {
       }
 
       setIsDepositModalOpen(false)
-      fetchAllData()
+      invalidateAllData()
     } catch (error) {
       console.error('Error saving deposit:', error)
       toast({
@@ -951,7 +799,7 @@ export default function MatchingPage() {
         title: "삭제 성공",
         description: "기타 입금 분류가 삭제되었습니다.",
       })
-      fetchAllData()
+      invalidateAllData()
     } catch (error) {
       console.error('Error deleting other deposit:', error)
       toast({
@@ -1004,7 +852,7 @@ export default function MatchingPage() {
       }
 
       setIsOtherDepositModalOpen(false)
-      fetchAllData()
+      invalidateAllData()
     } catch (error) {
       console.error('Error saving other deposit:', error)
       toast({
@@ -1039,7 +887,7 @@ export default function MatchingPage() {
             file={invoiceFile}
             onFileSelect={setInvoiceFile}
             onUpload={handleInvoiceUpload}
-            uploading={uploadingInvoice}
+            uploading={uploadTaxInvoiceMutation.isPending}
             acceptedFileTypes={{
               'text/csv': ['.csv'],
               'application/vnd.ms-excel': ['.xls'],
@@ -1050,7 +898,7 @@ export default function MatchingPage() {
               'application/x-msexcel': ['.xls']
             }}
           />
-          
+
           <FileUploadCard
             title="입금내역 업로드"
             icon="💰"
@@ -1058,7 +906,7 @@ export default function MatchingPage() {
             file={depositFile}
             onFileSelect={setDepositFile}
             onUpload={handleDepositUpload}
-            uploading={uploadingDeposit}
+            uploading={uploadBankDepositMutation.isPending}
             acceptedFileTypes={{
               'application/vnd.ms-excel': ['.xls'],
               'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
@@ -1108,10 +956,10 @@ export default function MatchingPage() {
             <TaxInvoicesTab
               invoices={taxInvoices}
               customers={customers}
-              loading={loading}
+              loading={isLoading}
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
-              onRefresh={fetchAllData}
+              onRefresh={invalidateAllData}
               onConnectInvoice={handleConnectInvoice}
               onAdd={handleAddInvoice}
               onEdit={handleEditInvoice}
@@ -1124,10 +972,10 @@ export default function MatchingPage() {
             <BankDepositsTab
               deposits={bankDeposits}
               customers={customers}
-              loading={loading}
+              loading={isLoading}
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
-              onRefresh={fetchAllData}
+              onRefresh={invalidateAllData}
               onConnectDeposit={handleConnectDeposit}
               onClassifyDeposit={handleClassifyDeposit}
               onAdd={handleAddDeposit}

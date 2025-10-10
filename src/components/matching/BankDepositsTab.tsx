@@ -155,11 +155,32 @@ export function BankDepositsTab({
     a.company_name.localeCompare(b.company_name, 'ko')
   )
 
-  // 고객사 검색 필터링 (CustomersTable과 동일한 방식)
+  // 고객사 검색 필터링 (회사명 + 대표자명 + 별칭)
   const filteredCustomers = sortedCustomers.filter(customer => {
     if (!customerSearchQuery) return true
-    const query = customerSearchQuery.toLowerCase()
-    return customer.company_name.toLowerCase().includes(query)
+    const query = customerSearchQuery.toLowerCase().trim()
+    const queryWithoutSpaces = query.replace(/\s+/g, '') // 공백 제거
+
+    // 1. 회사명 검색
+    if (customer.company_name.toLowerCase().includes(query)) return true
+
+    // 2. 대표자명 검색 (공백 포함/제거 둘 다 지원)
+    if (customer.representative_name) {
+      const repName = customer.representative_name.toLowerCase()
+      const repNameWithoutSpaces = repName.replace(/\s+/g, '')
+      if (repName.includes(query) || repNameWithoutSpaces.includes(queryWithoutSpaces)) {
+        return true
+      }
+    }
+
+    // 3. 별칭 검색 (배열, 공백 포함/제거 둘 다 지원)
+    if (customer.alias_names?.some(alias => {
+      const aliasLower = alias.toLowerCase()
+      const aliasWithoutSpaces = aliasLower.replace(/\s+/g, '')
+      return aliasLower.includes(query) || aliasWithoutSpaces.includes(queryWithoutSpaces)
+    })) return true
+
+    return false
   })
 
   // 검색 및 연결 상태 필터링
@@ -478,7 +499,13 @@ export function BankDepositsTab({
                                       className="w-full justify-between"
                                     >
                                       {selectedCustomer
-                                        ? customers.find((customer) => customer.id === selectedCustomer)?.company_name
+                                        ? (() => {
+                                            const customer = customers.find((c) => c.id === selectedCustomer)
+                                            if (!customer) return "고객사를 검색하세요..."
+                                            return customer.representative_name
+                                              ? `${customer.company_name} (${customer.representative_name})`
+                                              : customer.company_name
+                                          })()
                                         : "고객사를 검색하세요..."}
                                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                     </Button>
@@ -486,42 +513,54 @@ export function BankDepositsTab({
                                   <PopoverContent className="w-[380px] p-0" align="start">
                                     <Command>
                                       <CommandInput
-                                        placeholder="고객사명 검색..."
+                                        placeholder="고객사명, 대표자명 또는 별칭으로 검색..."
                                         value={customerSearchQuery}
                                         onValueChange={setCustomerSearchQuery}
                                       />
                                       <CommandList className="max-h-[200px]">
                                         <CommandEmpty>검색 결과가 없습니다.</CommandEmpty>
                                         <CommandGroup className="overflow-y-auto">
-                                          {filteredCustomers.map((customer) => (
-                                            <CommandItem
-                                              key={customer.id}
-                                              value={customer.company_name}
-                                              onSelect={() => {
-                                                setSelectedCustomer(customer.id)
-                                                setOpenPopover(false)
-                                                handleCustomerSelect(deposit.id, customer.id)
-                                              }}
-                                              className="cursor-pointer"
-                                              onMouseDown={(e) => {
-                                                e.preventDefault()
-                                                e.stopPropagation()
-                                              }}
-                                              onClick={() => {
-                                                setSelectedCustomer(customer.id)
-                                                setOpenPopover(false)
-                                                handleCustomerSelect(deposit.id, customer.id)
-                                              }}
-                                            >
-                                              <Check
-                                                className={cn(
-                                                  "mr-2 h-4 w-4",
-                                                  selectedCustomer === customer.id ? "opacity-100" : "opacity-0"
-                                                )}
-                                              />
-                                              {customer.company_name}
-                                            </CommandItem>
-                                          ))}
+                                          {filteredCustomers.map((customer) => {
+                                            // 검색을 위한 통합 문자열 생성 (회사명 + 대표자명 + 별칭)
+                                            const searchableText = [
+                                              customer.company_name,
+                                              customer.representative_name,
+                                              ...(customer.alias_names || [])
+                                            ].filter(Boolean).join(' ')
+
+                                            return (
+                                              <CommandItem
+                                                key={customer.id}
+                                                value={searchableText}
+                                                keywords={[customer.company_name, customer.representative_name, ...(customer.alias_names || [])].filter(Boolean)}
+                                                onSelect={() => {
+                                                  setSelectedCustomer(customer.id)
+                                                  setOpenPopover(false)
+                                                  handleCustomerSelect(deposit.id, customer.id)
+                                                }}
+                                                className="cursor-pointer"
+                                                onMouseDown={(e) => {
+                                                  e.preventDefault()
+                                                  e.stopPropagation()
+                                                }}
+                                                onClick={() => {
+                                                  setSelectedCustomer(customer.id)
+                                                  setOpenPopover(false)
+                                                  handleCustomerSelect(deposit.id, customer.id)
+                                                }}
+                                              >
+                                                <Check
+                                                  className={cn(
+                                                    "mr-2 h-4 w-4",
+                                                    selectedCustomer === customer.id ? "opacity-100" : "opacity-0"
+                                                  )}
+                                                />
+                                                {customer.representative_name
+                                                  ? `${customer.company_name} (${customer.representative_name})`
+                                                  : customer.company_name}
+                                              </CommandItem>
+                                            )
+                                          })}
                                         </CommandGroup>
                                       </CommandList>
                                     </Command>

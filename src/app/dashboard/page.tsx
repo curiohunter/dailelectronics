@@ -1,11 +1,11 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { DashboardStats } from "@/components/dashboard/DashboardStats"
 import { ReceivablesTable, CustomerReceivable } from "@/components/dashboard/ReceivablesTable"
 import { CustomerDetailModal } from "@/components/dashboard/CustomerDetailModal"
-import { createClient } from "@/lib/supabase/client"
+import { useAllData } from "@/hooks/use-data"
 
 interface ReceivablesSummary {
   totalCustomers: number
@@ -28,58 +28,44 @@ interface ReceivablesSummary {
 }
 
 export default function DashboardPage() {
-  const [customers, setCustomers] = useState<CustomerReceivable[]>([])
   const [selectedMonth, setSelectedMonth] = useState(new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1)) // Previous month
-  const [summary, setSummary] = useState<ReceivablesSummary>({
-    totalCustomers: 0,
-    monthlyInvoiceTotal: 0,
-    completedCount: 0,
-    completedAmount: 0,
-    unpaidCount: 0,
-    unpaidAmount: 0,
-    overpaidCount: 0,
-    overpaidAmount: 0,
-    topCustomers: [],
-    otherDeposits: {
-      internal: { count: 0, amount: 0 },
-      external: { count: 0, amount: 0 }
-    },
-    selectedMonth: selectedMonth
-  })
-  const [loading, setLoading] = useState(true)
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerReceivable | null>(null)
 
-  useEffect(() => {
-    fetchReceivablesData()
-  }, [selectedMonth])
+  // React Query로 데이터 가져오기 (캐시 활용)
+  const { data: apiData, isLoading, isError } = useAllData()
 
-  const fetchReceivablesData = async () => {
-    try {
-      setLoading(true)
-
-      console.log('🚀 Dashboard fetching data from server API...')
-
-      // Fetch all data from server-side API
-      const response = await fetch('/api/matching/all-data')
-
-      if (!response.ok) {
-        throw new Error(`API request failed: ${response.statusText}`)
+  // 데이터 계산 로직 (useMemo로 최적화)
+  const { customers, summary } = useMemo(() => {
+    if (!apiData || !apiData.success) {
+      return {
+        customers: [],
+        summary: {
+          totalCustomers: 0,
+          monthlyInvoiceTotal: 0,
+          completedCount: 0,
+          completedAmount: 0,
+          unpaidCount: 0,
+          unpaidAmount: 0,
+          overpaidCount: 0,
+          overpaidAmount: 0,
+          topCustomers: [],
+          otherDeposits: {
+            internal: { count: 0, amount: 0 },
+            external: { count: 0, amount: 0 }
+          },
+          selectedMonth: selectedMonth
+        }
       }
+    }
 
-      const result = await response.json()
+    console.log('🔄 Dashboard processing cached data:', {
+      customers: apiData.data.customers.length,
+      taxInvoices: apiData.data.taxInvoices.length,
+      bankDeposits: apiData.data.bankDeposits.length,
+      duration: apiData.meta.duration
+    })
 
-      if (!result.success) {
-        throw new Error(result.details || 'Failed to fetch data')
-      }
-
-      console.log('✅ Dashboard API response:', {
-        customers: result.data.customers.length,
-        taxInvoices: result.data.taxInvoices.length,
-        bankDeposits: result.data.bankDeposits.length,
-        duration: result.meta.duration
-      })
-
-      // Extract data from API response
+    // Extract data from API response
       interface Customer {
         id: string
         company_name: string
@@ -113,12 +99,12 @@ export default function DashboardPage() {
         customer_id: string | null
       }
 
-      const customers = result.data.customers as Customer[] | null
-      const invoices = result.data.taxInvoices as Invoice[] | null
-      const deposits = result.data.bankDeposits as Deposit[] | null
-      const invoiceRelations = result.data.invoiceRelations as InvoiceRelation[] | null
-      const depositRelations = result.data.depositRelations as DepositRelation[] | null
-      const classificationsData = result.data.otherDeposits
+    const customers = apiData.data.customers as Customer[] | null
+    const invoices = apiData.data.taxInvoices as Invoice[] | null
+    const deposits = apiData.data.bankDeposits as Deposit[] | null
+    const invoiceRelations = apiData.data.invoiceRelations as InvoiceRelation[] | null
+    const depositRelations = apiData.data.depositRelations as DepositRelation[] | null
+    const classificationsData = apiData.data.otherDeposits
 
 
       // Calculate totals per customer
@@ -281,9 +267,10 @@ export default function DashboardPage() {
         })
       }
 
-      setSummary(prev => ({
-        ...prev,
-        totalCustomers: customers?.length || 0, // Total customers, not just active ones
+    return {
+      customers: customersArray,
+      summary: {
+        totalCustomers: customers?.length || 0,
         monthlyInvoiceTotal: monthlyInvoices.reduce((sum, inv) => sum + inv.total_amount, 0),
         completedCount: completed.length,
         completedAmount,
@@ -293,16 +280,10 @@ export default function DashboardPage() {
         overpaidAmount: overpaid.reduce((sum, c) => sum + c.balance, 0),
         topCustomers,
         otherDeposits,
-        selectedMonth: selectedMonth  // selectedMonth 업데이트 추가
-      }))
-      
-      setCustomers(customersArray)
-    } catch (error) {
-      console.error('Error fetching receivables data:', error)
-    } finally {
-      setLoading(false)
+        selectedMonth: selectedMonth
+      }
     }
-  }
+  }, [apiData, selectedMonth])
 
   const handleCustomerClick = (customer: CustomerReceivable) => {
     setSelectedCustomer(customer)
@@ -332,9 +313,9 @@ export default function DashboardPage() {
         <DashboardStats summary={summary} onMonthChange={handleMonthChange} />
 
         {/* Receivables Table */}
-        <ReceivablesTable 
+        <ReceivablesTable
           customers={customers}
-          loading={loading}
+          loading={isLoading}
           onCustomerClick={handleCustomerClick}
         />
 
