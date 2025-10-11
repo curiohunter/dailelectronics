@@ -148,6 +148,8 @@ export function BankDepositsTab({
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
   const [connectionFilter, setConnectionFilter] = useState<ConnectionFilter>('all')
   const [currentPage, setCurrentPage] = useState(1)
+  const [startDate, setStartDate] = useState<string>("")
+  const [endDate, setEndDate] = useState<string>("")
   const itemsPerPage = 20
 
   // 고객사 정렬 (가나다순)
@@ -183,7 +185,7 @@ export function BankDepositsTab({
     return false
   })
 
-  // 검색 및 연결 상태 필터링
+  // 검색, 날짜, 연결 상태 필터링
   const filteredDeposits = deposits.filter(deposit => {
     // 검색 필터
     const query = searchQuery.toLowerCase()
@@ -193,6 +195,12 @@ export function BankDepositsTab({
       deposit.relatedCustomer?.company_name?.toLowerCase().includes(query)
     )
 
+    // 날짜 범위 필터
+    const depositDate = new Date(deposit.transaction_date)
+    const matchesDateRange =
+      (!startDate || depositDate >= new Date(startDate)) &&
+      (!endDate || depositDate <= new Date(endDate))
+
     // 연결 상태 필터
     const matchesConnection = connectionFilter === 'all' ||
       (connectionFilter === 'customer' && deposit.hasRelation) ||
@@ -200,7 +208,7 @@ export function BankDepositsTab({
       (connectionFilter === 'external' && deposit.classification?.classification_type === 'external') ||
       (connectionFilter === 'unconnected' && !deposit.hasRelation && !deposit.classification)
 
-    return matchesSearch && matchesConnection
+    return matchesSearch && matchesDateRange && matchesConnection
   })
 
   // 정렬
@@ -239,6 +247,9 @@ export function BankDepositsTab({
 
     return 0
   })
+
+  // 총 금액 계산 (필터링된 결과 기준)
+  const totalAmount = filteredDeposits.reduce((sum, deposit) => sum + deposit.deposit_amount, 0)
 
   // 페이지네이션
   const totalPages = Math.ceil(sortedDeposits.length / itemsPerPage)
@@ -286,47 +297,94 @@ export function BankDepositsTab({
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
+        <div className="space-y-4">
           <CardTitle>입금내역 목록</CardTitle>
-          <div className="flex gap-2">
-            {/* 연결 상태 필터 */}
-            <Select value={connectionFilter} onValueChange={(value) => {
-              setConnectionFilter(value as ConnectionFilter)
-              setCurrentPage(1) // 필터 변경 시 첫 페이지로
-            }}>
-              <SelectTrigger className="w-36">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">전체</SelectItem>
-                <SelectItem value="customer">고객사</SelectItem>
-                <SelectItem value="internal">내부 경영</SelectItem>
-                <SelectItem value="external">외부 기타</SelectItem>
-                <SelectItem value="unconnected">미분류</SelectItem>
-              </SelectContent>
-            </Select>
 
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="검색..."
-                value={searchQuery}
-                onChange={(e) => {
-                  onSearchChange(e.target.value)
-                  setCurrentPage(1) // 검색 시 첫 페이지로
-                }}
-                className="pl-10 w-64"
-              />
+          {/* 필터 및 총 금액 영역 */}
+          <div className="flex items-center justify-between gap-4">
+            {/* 좌측: 필터 영역 */}
+            <div className="flex items-center gap-2">
+              {/* 시작일 */}
+              <div className="flex items-center gap-2">
+                <Label htmlFor="start-date" className="text-sm whitespace-nowrap">시작일</Label>
+                <Input
+                  id="start-date"
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => {
+                    setStartDate(e.target.value)
+                    setCurrentPage(1)
+                  }}
+                  className="w-40"
+                />
+              </div>
+
+              {/* 종료일 */}
+              <div className="flex items-center gap-2">
+                <Label htmlFor="end-date" className="text-sm whitespace-nowrap">종료일</Label>
+                <Input
+                  id="end-date"
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => {
+                    setEndDate(e.target.value)
+                    setCurrentPage(1)
+                  }}
+                  className="w-40"
+                />
+              </div>
+
+              {/* 연결 상태 필터 */}
+              <Select value={connectionFilter} onValueChange={(value) => {
+                setConnectionFilter(value as ConnectionFilter)
+                setCurrentPage(1)
+              }}>
+                <SelectTrigger className="w-32">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">전체</SelectItem>
+                  <SelectItem value="customer">고객사</SelectItem>
+                  <SelectItem value="internal">내부 경영</SelectItem>
+                  <SelectItem value="external">외부 기타</SelectItem>
+                  <SelectItem value="unconnected">미분류</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {/* 검색 */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="검색..."
+                  value={searchQuery}
+                  onChange={(e) => {
+                    onSearchChange(e.target.value)
+                    setCurrentPage(1)
+                  }}
+                  className="pl-10 w-48"
+                />
+              </div>
             </div>
-            <Button onClick={onRefresh} size="icon" variant="outline">
-              <RefreshCw className="h-4 w-4" />
-            </Button>
-            {onAdd && (
-              <Button onClick={onAdd}>
-                <Plus className="mr-2 h-4 w-4" />
-                추가
+
+            {/* 우측: 총 금액 + 액션 버튼 */}
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800">
+                <span className="text-xl font-bold text-blue-700 dark:text-blue-300">
+                  {formatCurrency(totalAmount)}
+                </span>
+              </div>
+
+              <Button onClick={onRefresh} size="icon" variant="outline">
+                <RefreshCw className="h-4 w-4" />
               </Button>
-            )}
+
+              {onAdd && (
+                <Button onClick={onAdd}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  추가
+                </Button>
+              )}
+            </div>
           </div>
         </div>
       </CardHeader>

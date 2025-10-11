@@ -74,6 +74,14 @@ const formatAmount = (amount: number) => {
   return amount.toLocaleString('ko-KR')
 }
 
+const formatCurrency = (amount: number) => {
+  return new Intl.NumberFormat('ko-KR', {
+    style: 'currency',
+    currency: 'KRW',
+    maximumFractionDigits: 0
+  }).format(amount)
+}
+
 type SortField = 'transaction_date' | 'deposit_name' | null
 type SortDirection = 'asc' | 'desc'
 
@@ -88,6 +96,8 @@ export function OtherDepositsTab({
   const [currentPage, setCurrentPage] = useState(1)
   const [sortField, setSortField] = useState<SortField>(null)
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
+  const [startDate, setStartDate] = useState<string>("")
+  const [endDate, setEndDate] = useState<string>("")
   const itemsPerPage = 20
 
   // 필터링
@@ -98,6 +108,15 @@ export function OtherDepositsTab({
       const matchesDepositName = deposit.deposit?.deposit_name?.toLowerCase().includes(query)
       const matchesDetail = deposit.classification_detail?.toLowerCase().includes(query)
       if (!matchesDepositName && !matchesDetail) return false
+    }
+
+    // 날짜 범위 필터
+    if (deposit.deposit?.transaction_date) {
+      const depositDate = new Date(deposit.deposit.transaction_date)
+      const matchesDateRange =
+        (!startDate || depositDate >= new Date(startDate)) &&
+        (!endDate || depositDate <= new Date(endDate))
+      if (!matchesDateRange) return false
     }
 
     // 타입 필터
@@ -140,6 +159,9 @@ export function OtherDepositsTab({
     return 0
   })
 
+  // 총 금액 계산 (필터링된 결과 기준)
+  const totalAmount = filteredDeposits.reduce((sum, deposit) => sum + (deposit.deposit?.deposit_amount || 0), 0)
+
   // 페이지네이션 계산
   const totalPages = Math.ceil(sortedDeposits.length / itemsPerPage)
   const startIndex = (currentPage - 1) * itemsPerPage
@@ -178,53 +200,87 @@ export function OtherDepositsTab({
   return (
     <Card>
       <CardHeader>
-        <div className="flex justify-between items-center">
+        <div className="flex flex-col gap-4">
           <CardTitle>기타 입금 관리</CardTitle>
-          <Button onClick={onAdd}>
-            <Plus className="mr-2 h-4 w-4" />
-            기타 입금 추가
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {/* 필터 섹션 */}
-        <div className="grid grid-cols-3 gap-4 mb-4">
-          <div>
-            <Label htmlFor="search">검색</Label>
-            <Input
-              id="search"
-              placeholder="입금명, 상세 내용 검색..."
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value)
+
+          {/* 필터 및 총 금액 영역 */}
+          <div className="flex items-center justify-between gap-4">
+            {/* 좌측: 필터 영역 */}
+            <div className="flex items-center gap-2">
+              {/* 시작일 */}
+              <div className="flex items-center gap-2">
+                <Label htmlFor="start-date" className="text-sm whitespace-nowrap">시작일</Label>
+                <Input
+                  id="start-date"
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => {
+                    setStartDate(e.target.value)
+                    setCurrentPage(1)
+                  }}
+                  className="w-40"
+                />
+              </div>
+
+              {/* 종료일 */}
+              <div className="flex items-center gap-2">
+                <Label htmlFor="end-date" className="text-sm whitespace-nowrap">종료일</Label>
+                <Input
+                  id="end-date"
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => {
+                    setEndDate(e.target.value)
+                    setCurrentPage(1)
+                  }}
+                  className="w-40"
+                />
+              </div>
+
+              {/* 분류 필터 */}
+              <Select value={typeFilter} onValueChange={(value: any) => {
+                setTypeFilter(value)
                 setCurrentPage(1)
-              }}
-            />
-          </div>
+              }}>
+                <SelectTrigger className="w-32">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">전체</SelectItem>
+                  <SelectItem value="internal">내부 경영</SelectItem>
+                  <SelectItem value="external">외부 기타</SelectItem>
+                </SelectContent>
+              </Select>
 
-          <div>
-            <Label htmlFor="type-filter">분류 필터</Label>
-            <Select value={typeFilter} onValueChange={(value: any) => {
-              setTypeFilter(value)
-              setCurrentPage(1)
-            }}>
-              <SelectTrigger id="type-filter">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">전체</SelectItem>
-                <SelectItem value="internal">내부 경영</SelectItem>
-                <SelectItem value="external">외부 기타</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+              {/* 검색 */}
+              <Input
+                placeholder="입금명, 상세 내용 검색..."
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value)
+                  setCurrentPage(1)
+                }}
+                className="w-48"
+              />
+            </div>
 
-          <div className="flex items-end">
-            <div className="text-sm text-muted-foreground">
-              총 {filteredDeposits.length}개 기타 입금
+            {/* 우측: 총 금액 + 액션 버튼 */}
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800">
+                <span className="text-xl font-bold text-blue-700 dark:text-blue-300">
+                  {formatCurrency(totalAmount)}
+                </span>
+              </div>
+
+              <Button onClick={onAdd}>
+                <Plus className="mr-2 h-4 w-4" />
+                추가
+              </Button>
             </div>
           </div>
         </div>
+      </CardHeader>
+      <CardContent>
 
         {/* 테이블 */}
         <Table>

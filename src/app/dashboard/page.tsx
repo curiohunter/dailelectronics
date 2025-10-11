@@ -9,7 +9,10 @@ import { useAllData } from "@/hooks/use-data"
 
 interface ReceivablesSummary {
   totalCustomers: number
+  totalInvoiceAmount: number
+  totalDepositAmount: number
   monthlyInvoiceTotal: number
+  monthlyDepositTotal: number
   completedCount: number
   completedAmount: number
   unpaidCount: number
@@ -41,7 +44,10 @@ export default function DashboardPage() {
         customers: [],
         summary: {
           totalCustomers: 0,
+          totalInvoiceAmount: 0,
+          totalDepositAmount: 0,
           monthlyInvoiceTotal: 0,
+          monthlyDepositTotal: 0,
           completedCount: 0,
           completedAmount: 0,
           unpaidCount: 0,
@@ -219,6 +225,11 @@ export default function DashboardPage() {
         return date.getMonth() === selectedMonthNum && date.getFullYear() === selectedYear
       }) || []
 
+      const monthlyDeposits = deposits?.filter(dep => {
+        const date = new Date(dep.transaction_date)
+        return date.getMonth() === selectedMonthNum && date.getFullYear() === selectedYear
+      }) || []
+
       const customersArray = Array.from(customerMap.values())
       const completed = customersArray.filter(c => c.status === 'complete')
       const unpaid = customersArray.filter(c => c.status === 'unpaid')
@@ -271,7 +282,10 @@ export default function DashboardPage() {
       customers: customersArray,
       summary: {
         totalCustomers: customers?.length || 0,
+        totalInvoiceAmount: invoices?.reduce((sum, inv) => sum + inv.total_amount, 0) || 0,
+        totalDepositAmount: deposits?.reduce((sum, dep) => sum + dep.deposit_amount, 0) || 0,
         monthlyInvoiceTotal: monthlyInvoices.reduce((sum, inv) => sum + inv.total_amount, 0),
+        monthlyDepositTotal: monthlyDeposits.reduce((sum, dep) => sum + dep.deposit_amount, 0),
         completedCount: completed.length,
         completedAmount,
         unpaidCount: unpaid.length,
