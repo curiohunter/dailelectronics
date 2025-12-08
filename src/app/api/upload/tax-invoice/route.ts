@@ -219,7 +219,15 @@ export async function POST(request: NextRequest) {
         return (name || '').trim().toLowerCase()
       }
 
-      // 회사명과 별칭으로 빠른 검색을 위한 Map 생성
+      // 사업자번호로 빠른 검색을 위한 Map 생성 (가장 확실한 매칭)
+      const customersByBusinessNumber = new Map<string, string>() // business_number -> customer_id
+      allExistingCustomers?.forEach(c => {
+        if (c.business_number) {
+          customersByBusinessNumber.set(c.business_number, c.id)
+        }
+      })
+
+      // 회사명과 별칭으로 빠른 검색을 위한 Map 생성 (보조 매칭)
       const customersByName = new Map<string, string>() // normalized_name -> customer_id
       allExistingCustomers?.forEach(c => {
         // 회사명 매핑
@@ -240,31 +248,56 @@ export async function POST(request: NextRequest) {
         approvalToIndex.set(inv.approval_number, idx)
       })
 
+      // 원본 인보이스 데이터에서 buyer_business_number 추출을 위한 Map
+      const approvalToBuyerBizNum = new Map<string, string>()
+      invoices.forEach((inv: any) => {
+        if (inv.approval_number && inv.buyer_business_number) {
+          approvalToBuyerBizNum.set(inv.approval_number, inv.buyer_business_number)
+        }
+      })
+
       for (const invoice of insertedInvoices) {
         const index = approvalToIndex.get(invoice.approval_number) ?? -1
         if (index === -1) continue
 
         const buyerName = invoiceBuyerNames[index]
+        const buyerBusinessNumber = approvalToBuyerBizNum.get(invoice.approval_number) || null
         const normalizedBuyerName = normalizeCompanyName(buyerName)
 
-        // 고객 매칭 (메모리에서)
-        const customerId = customersByName.get(normalizedBuyerName) || null
+        // 고객 매칭 우선순위: 1. 사업자번호 (100% 확실) → 2. 회사명/별칭
+        let customerId: string | null = null
+        let matchMethod = ''
+
+        if (buyerBusinessNumber) {
+          customerId = customersByBusinessNumber.get(buyerBusinessNumber) || null
+          if (customerId) {
+            matchMethod = '사업자번호'
+          }
+        }
+
+        // 사업자번호로 못 찾으면 회사명/별칭으로 시도
+        if (!customerId) {
+          customerId = customersByName.get(normalizedBuyerName) || null
+          if (customerId) {
+            matchMethod = '회사명/별칭'
+          }
+        }
 
         relationsToInsert.push({
           customer_id: customerId,
           tax_invoice_id: invoice.id
         })
 
-        console.log(`세금계산서 연결: ${buyerName} -> ${customerId ? '고객 찾음' : '고객 없음'}`)
+        console.log(`세금계산서 연결: ${buyerName} (${buyerBusinessNumber || '사업자번호 없음'}) -> ${customerId ? `고객 찾음 (${matchMethod})` : '고객 없음'}`)
       }
 
-      // 관계 테이블 upsert (중복 방지)
+      // 관계 테이블 upsert (기존 NULL 관계도 업데이트)
       if (relationsToInsert.length > 0) {
         const { error: relationError } = await (supabase as any)
           .from('customer_tax_invoices')
           .upsert(relationsToInsert, {
             onConflict: 'tax_invoice_id',
-            ignoreDuplicates: true
+            ignoreDuplicates: false  // 기존 관계도 업데이트 (NULL → 실제 고객)
           })
 
         if (relationError) {

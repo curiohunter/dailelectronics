@@ -188,52 +188,106 @@ export function CustomerDetailModal({ customer, onClose }: CustomerDetailModalPr
   const exportToExcel = () => {
     if (!customer || !customerDetails) return
 
-    // 세금계산서 데이터 준비
+    // 세금계산서 합계
+    const invoiceTotal = customerDetails.invoices.reduce((sum, inv) => sum + inv.total_amount, 0)
+    // 입금 합계
+    const depositTotal = customerDetails.deposits.reduce((sum, dep) => sum + (dep.deposit_amount || 0), 0)
+
+    // 세금계산서 데이터 준비 (상세 정보 포함)
     const invoicesData = customerDetails.invoices.map(inv => ({
       '발행일': new Date(inv.issue_date).toLocaleDateString('ko-KR'),
-      '금액': inv.total_amount,
-      '구분': '세금계산서'
+      '품목': inv.item_name || '-',
+      '공급가액': inv.supply_amount || 0,
+      '세액': inv.tax_amount || 0,
+      '합계금액': inv.total_amount || 0,
+      '승인번호': inv.approval_number || '-',
+      '비고': inv.notes || ''
     }))
 
-    // 입금내역 데이터 준비
+    // 세금계산서 합계 행 추가
+    if (invoicesData.length > 0) {
+      invoicesData.push({
+        '발행일': '합계',
+        '품목': '',
+        '공급가액': customerDetails.invoices.reduce((sum, inv) => sum + (inv.supply_amount || 0), 0),
+        '세액': customerDetails.invoices.reduce((sum, inv) => sum + (inv.tax_amount || 0), 0),
+        '합계금액': invoiceTotal,
+        '승인번호': '',
+        '비고': ''
+      })
+    }
+
+    // 입금내역 데이터 준비 (상세 정보 포함)
     const depositsData = customerDetails.deposits.map(dep => ({
       '입금일': new Date(dep.transaction_date).toLocaleDateString('ko-KR'),
-      '금액': dep.deposit_amount || 0,
-      '구분': '입금'
+      '입금시간': dep.transaction_time || '-',
+      '입금자명': dep.deposit_name || '-',
+      '입금액': dep.deposit_amount || 0,
+      '지점': dep.branch_name || '-',
+      '비고': dep.notes || ''
     }))
+
+    // 입금내역 합계 행 추가
+    if (depositsData.length > 0) {
+      depositsData.push({
+        '입금일': '합계',
+        '입금시간': '',
+        '입금자명': '',
+        '입금액': depositTotal,
+        '지점': '',
+        '비고': ''
+      })
+    }
 
     // 요약 데이터
     const summaryData = [{
       '업체명': customer.companyName,
       '조회기간': `${dateRange.start} ~ ${dateRange.end}`,
-      '세금계산서 합계': customerDetails.invoices.reduce((sum, inv) => sum + inv.total_amount, 0),
-      '입금 합계': customerDetails.deposits.reduce((sum, dep) => sum + (dep.deposit_amount || 0), 0),
+      '세금계산서 건수': `${customerDetails.invoices.length}건`,
+      '세금계산서 합계': invoiceTotal,
+      '입금 건수': `${customerDetails.deposits.length}건`,
+      '입금 합계': depositTotal,
       '잔액': customer.balance,
-      '상태': customer.status === 'complete' ? '수금완료' : 
+      '상태': customer.status === 'complete' ? '수금완료' :
               customer.status === 'unpaid' ? '미수금' : '과납금'
     }]
 
     // 워크북 생성
     const wb = XLSX.utils.book_new()
-    
+
     // 요약 시트
     const summaryWs = XLSX.utils.json_to_sheet(summaryData)
+    // 열 너비 설정
+    summaryWs['!cols'] = [
+      { wch: 20 }, { wch: 25 }, { wch: 15 }, { wch: 15 },
+      { wch: 12 }, { wch: 15 }, { wch: 15 }, { wch: 10 }
+    ]
     XLSX.utils.book_append_sheet(wb, summaryWs, '요약')
-    
+
     // 세금계산서 시트
-    if (invoicesData.length > 0) {
+    if (customerDetails.invoices.length > 0) {
       const invoicesWs = XLSX.utils.json_to_sheet(invoicesData)
+      // 열 너비 설정
+      invoicesWs['!cols'] = [
+        { wch: 12 }, { wch: 30 }, { wch: 15 }, { wch: 12 },
+        { wch: 15 }, { wch: 25 }, { wch: 20 }
+      ]
       XLSX.utils.book_append_sheet(wb, invoicesWs, '세금계산서')
     }
-    
+
     // 입금내역 시트
-    if (depositsData.length > 0) {
+    if (customerDetails.deposits.length > 0) {
       const depositsWs = XLSX.utils.json_to_sheet(depositsData)
+      // 열 너비 설정
+      depositsWs['!cols'] = [
+        { wch: 12 }, { wch: 10 }, { wch: 15 }, { wch: 15 },
+        { wch: 15 }, { wch: 20 }
+      ]
       XLSX.utils.book_append_sheet(wb, depositsWs, '입금내역')
     }
 
     // 파일 다운로드
-    const fileName = `${customer.companyName}_거래내역_${new Date().toISOString().split('T')[0]}.xlsx`
+    const fileName = `${customer.companyName}_거래내역_${dateRange.start}~${dateRange.end}.xlsx`
     XLSX.writeFile(wb, fileName)
   }
 
@@ -287,6 +341,7 @@ export function CustomerDetailModal({ customer, onClose }: CustomerDetailModalPr
           <thead>
             <tr>
               <th>발행일</th>
+              <th>품목</th>
               <th class="text-right">금액</th>
             </tr>
           </thead>
@@ -294,11 +349,13 @@ export function CustomerDetailModal({ customer, onClose }: CustomerDetailModalPr
             ${customerDetails.invoices.map(inv => `
               <tr>
                 <td>${new Date(inv.issue_date).toLocaleDateString('ko-KR')}</td>
+                <td>${inv.item_name || '-'}</td>
                 <td class="text-right">${formatCurrency(inv.total_amount)}</td>
               </tr>
             `).join('')}
             <tr>
               <th>합계</th>
+              <th></th>
               <th class="text-right">${formatCurrency(customerDetails.invoices.reduce((sum, inv) => sum + inv.total_amount, 0))}</th>
             </tr>
           </tbody>

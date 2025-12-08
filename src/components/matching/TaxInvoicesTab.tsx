@@ -29,11 +29,25 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 import { TaxInvoiceModal } from "./TaxInvoiceModal"
 import {
   Search, RefreshCw, Link, Loader2, Plus, Edit, Trash2,
-  ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight
+  ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, Check, ChevronsUpDown
 } from "lucide-react"
+import { cn } from "@/lib/utils"
 
 interface Customer {
   id: string
@@ -119,6 +133,43 @@ export function TaxInvoicesTab({
   const [startDate, setStartDate] = useState<string>("")
   const [endDate, setEndDate] = useState<string>("")
   const itemsPerPage = 20
+
+  // 고객사 선택 모달 상태
+  const [openCustomerPopover, setOpenCustomerPopover] = useState<string | null>(null)
+  const [customerSearchQuery, setCustomerSearchQuery] = useState("")
+
+  // 고객사 정렬 (가나다순)
+  const sortedCustomers = [...customers].sort((a, b) =>
+    a.company_name.localeCompare(b.company_name, 'ko')
+  )
+
+  // 고객사 검색 필터링 (회사명 + 대표자명 + 별칭)
+  const filteredCustomers = sortedCustomers.filter(customer => {
+    if (!customerSearchQuery) return true
+    const query = customerSearchQuery.toLowerCase().trim()
+    const queryWithoutSpaces = query.replace(/\s+/g, '') // 공백 제거
+
+    // 1. 회사명 검색
+    if (customer.company_name.toLowerCase().includes(query)) return true
+
+    // 2. 대표자명 검색 (공백 포함/제거 둘 다 지원)
+    if (customer.representative_name) {
+      const repName = customer.representative_name.toLowerCase()
+      const repNameWithoutSpaces = repName.replace(/\s+/g, '')
+      if (repName.includes(query) || repNameWithoutSpaces.includes(queryWithoutSpaces)) {
+        return true
+      }
+    }
+
+    // 3. 별칭 검색 (배열, 공백 포함/제거 둘 다 지원)
+    if (customer.alias_names?.some(alias => {
+      const aliasLower = alias.toLowerCase()
+      const aliasWithoutSpaces = aliasLower.replace(/\s+/g, '')
+      return aliasLower.includes(query) || aliasWithoutSpaces.includes(queryWithoutSpaces)
+    })) return true
+
+    return false
+  })
 
   // 검색 및 연결 상태 필터링
   const filteredInvoices = invoices.filter(invoice => {
@@ -408,20 +459,75 @@ export function TaxInvoicesTab({
                                 이 세금계산서를 연결할 고객사를 선택하세요.
                               </DialogDescription>
                             </DialogHeader>
-                            <Select
-                              onValueChange={(value) => onConnectInvoice(invoice.id, value)}
+                            <Popover
+                              open={openCustomerPopover === invoice.id}
+                              onOpenChange={(open) => {
+                                setOpenCustomerPopover(open ? invoice.id : null)
+                                if (!open) setCustomerSearchQuery("")
+                              }}
+                              modal={true}
                             >
-                              <SelectTrigger>
-                                <SelectValue placeholder="고객사 선택" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {customers.map(customer => (
-                                  <SelectItem key={customer.id} value={customer.id}>
-                                    {customer.company_name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                              <PopoverTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  role="combobox"
+                                  aria-expanded={openCustomerPopover === invoice.id}
+                                  className="w-full justify-between"
+                                >
+                                  고객사 선택
+                                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-[380px] p-0" align="start">
+                                <Command>
+                                  <CommandInput
+                                    placeholder="고객사명, 대표자명 또는 별칭으로 검색..."
+                                    value={customerSearchQuery}
+                                    onValueChange={setCustomerSearchQuery}
+                                  />
+                                  <CommandList className="max-h-[200px]">
+                                    <CommandEmpty>검색 결과가 없습니다.</CommandEmpty>
+                                    <CommandGroup className="overflow-y-auto">
+                                      {filteredCustomers.map((customer) => {
+                                        const searchableText = [
+                                          customer.company_name,
+                                          customer.representative_name,
+                                          ...(customer.alias_names || [])
+                                        ].filter(Boolean).join(' ')
+
+                                        return (
+                                          <CommandItem
+                                            key={customer.id}
+                                            value={searchableText}
+                                            keywords={[customer.company_name, customer.representative_name, ...(customer.alias_names || [])].filter((k): k is string => Boolean(k))}
+                                            onSelect={() => {
+                                              onConnectInvoice(invoice.id, customer.id)
+                                              setOpenCustomerPopover(null)
+                                              setCustomerSearchQuery("")
+                                            }}
+                                            className="cursor-pointer"
+                                            onMouseDown={(e) => {
+                                              e.preventDefault()
+                                              e.stopPropagation()
+                                            }}
+                                            onClick={() => {
+                                              onConnectInvoice(invoice.id, customer.id)
+                                              setOpenCustomerPopover(null)
+                                              setCustomerSearchQuery("")
+                                            }}
+                                          >
+                                            <Check className="mr-2 h-4 w-4 opacity-0" />
+                                            {customer.representative_name
+                                              ? `${customer.company_name} (${customer.representative_name})`
+                                              : customer.company_name}
+                                          </CommandItem>
+                                        )
+                                      })}
+                                    </CommandGroup>
+                                  </CommandList>
+                                </Command>
+                              </PopoverContent>
+                            </Popover>
                           </DialogContent>
                         </Dialog>
                       )}
