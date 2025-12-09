@@ -74,14 +74,14 @@ export function CustomerDetailModal({ customer, onClose }: CustomerDetailModalPr
         .select('notes')
         .eq('id', customer.id)
         .single()
-      
+
       const customerData = data as CustomerNotes | null
-      
-      if (customerData?.notes) {
-        setMemo(customerData.notes)
-      }
+
+      // 메모가 있으면 설정, 없으면 빈 문자열로 초기화 (이전 고객 메모 잔류 방지)
+      setMemo(customerData?.notes || '')
     } catch (error) {
       console.error('Error fetching customer memo:', error)
+      setMemo('')  // 에러 시에도 초기화
     }
   }
 

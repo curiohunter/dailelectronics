@@ -248,8 +248,18 @@ export class FileParser {
       const taxAmount = this.parseAmount(row.세액)
       
       // 날짜 파싱
-      const issueDate = this.parseDate(row.발급일자)
-      const creationDate = this.parseDate(row.작성일자)
+      // 작성일자 우선 사용 (승인번호 앞 8자리와 동일), 없으면 승인번호에서 추출, 그래도 없으면 발급일자
+      let creationDate: string
+      if (row.작성일자) {
+        creationDate = this.parseDate(row.작성일자)
+      } else if (approval && approval.length >= 8) {
+        // 승인번호 앞 8자리에서 날짜 추출 (YYYYMMDD 형식)
+        const dateStr = approval.substring(0, 8)
+        creationDate = `${dateStr.substring(0, 4)}-${dateStr.substring(4, 6)}-${dateStr.substring(6, 8)}`
+      } else {
+        creationDate = this.parseDate(row.발급일자)
+      }
+      const issueDate = creationDate  // 발행일 = 작성일자 (세금계산서 기준)
       const transmissionDate = this.parseDate(row.전송일자)
       const itemDate = this.parseDate(row.품목일자)
       

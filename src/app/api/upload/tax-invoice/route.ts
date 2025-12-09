@@ -219,10 +219,11 @@ export async function POST(request: NextRequest) {
         return (name || '').trim().toLowerCase()
       }
 
-      // 사업자번호로 빠른 검색을 위한 Map 생성 (가장 확실한 매칭)
-      const customersByBusinessNumber = new Map<string, string>() // business_number -> customer_id
+      // 🔧 FIX: customerMap (2단계에서 이미 신규 고객 포함)을 기본으로 사용
+      // 사업자번호로 빠른 검색을 위한 Map - customerMap 복사 후 기존 고객 추가
+      const customersByBusinessNumber = new Map<string, string>(customerMap) // 신규 고객 포함
       allExistingCustomers?.forEach(c => {
-        if (c.business_number) {
+        if (c.business_number && !customersByBusinessNumber.has(c.business_number)) {
           customersByBusinessNumber.set(c.business_number, c.id)
         }
       })
