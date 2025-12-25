@@ -223,6 +223,7 @@ export function CustomerDetailModal({ customer, onClose }: CustomerDetailModalPr
       '입금시간': dep.transaction_time || '-',
       '입금자명': dep.deposit_name || '-',
       '입금액': dep.deposit_amount || 0,
+      '구분': dep.transaction_type === '잔액조정' ? '[자동조정]' : '-',
       '지점': dep.branch_name || '-',
       '비고': dep.notes || ''
     }))
@@ -234,6 +235,7 @@ export function CustomerDetailModal({ customer, onClose }: CustomerDetailModalPr
         '입금시간': '',
         '입금자명': '',
         '입금액': depositTotal,
+        '구분': '',
         '지점': '',
         '비고': ''
       })
@@ -317,6 +319,8 @@ export function CustomerDetailModal({ customer, onClose }: CustomerDetailModalPr
           .status-complete { color: green; font-weight: bold; }
           .status-unpaid { color: red; font-weight: bold; }
           .status-overpaid { color: blue; font-weight: bold; }
+          .auto-adjusted { background-color: #f3e8ff; }
+          .auto-adjusted-badge { color: #9333ea; font-size: 11px; margin-left: 5px; }
           @media print {
             body { margin: 0; }
             .no-print { display: none; }
@@ -366,18 +370,23 @@ export function CustomerDetailModal({ customer, onClose }: CustomerDetailModalPr
           <thead>
             <tr>
               <th>입금일</th>
+              <th>구분</th>
               <th class="text-right">금액</th>
             </tr>
           </thead>
           <tbody>
-            ${customerDetails.deposits.map(dep => `
-              <tr>
+            ${customerDetails.deposits.map(dep => {
+              const isAutoAdjusted = dep.transaction_type === '잔액조정'
+              return `
+              <tr class="${isAutoAdjusted ? 'auto-adjusted' : ''}">
                 <td>${new Date(dep.transaction_date).toLocaleDateString('ko-KR')}</td>
+                <td>${isAutoAdjusted ? '<span class="auto-adjusted-badge">[자동조정]</span>' : '-'}</td>
                 <td class="text-right">${formatCurrency(dep.deposit_amount || 0)}</td>
               </tr>
-            `).join('')}
+            `}).join('')}
             <tr>
               <th>합계</th>
+              <th></th>
               <th class="text-right">${formatCurrency(customerDetails.deposits.reduce((sum, dep) => sum + (dep.deposit_amount || 0), 0))}</th>
             </tr>
           </tbody>
@@ -506,16 +515,28 @@ export function CustomerDetailModal({ customer, onClose }: CustomerDetailModalPr
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {customerDetails.deposits.map((deposit, idx) => (
-                      <div key={deposit.id} className="flex justify-between text-sm">
-                        <span className="text-gray-500">
-                          {new Date(deposit.transaction_date).toLocaleDateString('ko-KR')}
-                        </span>
-                        <span className="font-medium">
-                          {formatCurrency(deposit.deposit_amount || 0)}
-                        </span>
-                      </div>
-                    ))}
+                    {customerDetails.deposits.map((deposit, idx) => {
+                      const isAutoAdjusted = deposit.transaction_type === '잔액조정'
+                      return (
+                        <div key={deposit.id} className={cn(
+                          "flex justify-between text-sm",
+                          isAutoAdjusted && "bg-purple-50 -mx-1 px-1 rounded"
+                        )}>
+                          <span className="text-gray-500 flex items-center gap-1">
+                            {new Date(deposit.transaction_date).toLocaleDateString('ko-KR')}
+                            {isAutoAdjusted && (
+                              <span className="text-xs text-purple-600 font-medium">[자동조정]</span>
+                            )}
+                          </span>
+                          <span className={cn(
+                            "font-medium",
+                            isAutoAdjusted && "text-purple-600"
+                          )}>
+                            {formatCurrency(deposit.deposit_amount || 0)}
+                          </span>
+                        </div>
+                      )
+                    })}
                     <div className="pt-2 mt-2 border-t flex justify-between font-semibold">
                       <span>합계:</span>
                       <span>

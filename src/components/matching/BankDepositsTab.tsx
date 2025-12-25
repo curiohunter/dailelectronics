@@ -118,7 +118,7 @@ const formatCurrency = (amount: number) => {
 
 type SortField = 'transaction_date' | 'deposit_name' | 'deposit_amount' | 'branch_name' | null
 type SortDirection = 'asc' | 'desc'
-type ConnectionFilter = 'all' | 'customer' | 'internal' | 'external' | 'unconnected'
+type ConnectionFilter = 'all' | 'customer' | 'internal' | 'external' | 'unconnected' | 'auto_adjusted'
 
 export function BankDepositsTab({
   deposits,
@@ -201,12 +201,16 @@ export function BankDepositsTab({
       (!startDate || depositDate >= new Date(startDate)) &&
       (!endDate || depositDate <= new Date(endDate))
 
+    // 자동조정 여부 체크
+    const isAutoAdjusted = deposit.transaction_type === '잔액조정'
+
     // 연결 상태 필터
     const matchesConnection = connectionFilter === 'all' ||
-      (connectionFilter === 'customer' && deposit.hasRelation) ||
+      (connectionFilter === 'customer' && deposit.hasRelation && !isAutoAdjusted) ||
       (connectionFilter === 'internal' && deposit.classification?.classification_type === 'internal') ||
       (connectionFilter === 'external' && deposit.classification?.classification_type === 'external') ||
-      (connectionFilter === 'unconnected' && !deposit.hasRelation && !deposit.classification)
+      (connectionFilter === 'unconnected' && !deposit.hasRelation && !deposit.classification && !isAutoAdjusted) ||
+      (connectionFilter === 'auto_adjusted' && isAutoAdjusted)
 
     return matchesSearch && matchesDateRange && matchesConnection
   })
@@ -345,6 +349,7 @@ export function BankDepositsTab({
                 <SelectContent>
                   <SelectItem value="all">전체</SelectItem>
                   <SelectItem value="customer">고객사</SelectItem>
+                  <SelectItem value="auto_adjusted">자동조정</SelectItem>
                   <SelectItem value="internal">내부 경영</SelectItem>
                   <SelectItem value="external">외부 기타</SelectItem>
                   <SelectItem value="unconnected">미분류</SelectItem>
@@ -457,15 +462,28 @@ export function BankDepositsTab({
                 </TableCell>
               </TableRow>
             ) : (
-              paginatedDeposits.map((deposit) => (
-                <TableRow key={deposit.id}>
+              paginatedDeposits.map((deposit) => {
+                const isAutoAdjusted = deposit.transaction_type === '잔액조정'
+                return (
+                <TableRow key={deposit.id} className={isAutoAdjusted ? "bg-purple-50" : ""}>
                   <TableCell>{formatDate(deposit.transaction_date)}</TableCell>
                   <TableCell>{deposit.transaction_time || '-'}</TableCell>
-                  <TableCell>{deposit.deposit_name || '-'}</TableCell>
-                  <TableCell className="font-medium">{formatCurrency(deposit.deposit_amount)}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1">
+                      {deposit.deposit_name || '-'}
+                      {isAutoAdjusted && (
+                        <span className="text-xs text-purple-600 font-medium">[자동조정]</span>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell className={cn("font-medium", isAutoAdjusted && "text-purple-600")}>{formatCurrency(deposit.deposit_amount)}</TableCell>
                   <TableCell>{deposit.branch_name || '-'}</TableCell>
                   <TableCell>
-                    {deposit.hasRelation ? (
+                    {isAutoAdjusted ? (
+                      <Badge className="bg-purple-100 text-purple-700 border-purple-300">
+                        {deposit.relatedCustomer?.company_name || '자동조정'} 🔄
+                      </Badge>
+                    ) : deposit.hasRelation ? (
                       <Badge variant="default">
                         {deposit.relatedCustomer?.company_name || '연결됨'} ✅
                       </Badge>
@@ -481,7 +499,7 @@ export function BankDepositsTab({
                   </TableCell>
                   <TableCell className="text-center">
                     <div className="flex justify-center gap-1">
-                      {!deposit.hasRelation && !deposit.classification && (
+                      {!deposit.hasRelation && !deposit.classification && !isAutoAdjusted && (
                         <>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -651,7 +669,7 @@ export function BankDepositsTab({
                     </div>
                   </TableCell>
                 </TableRow>
-              ))
+              )})
             )}
           </TableBody>
         </Table>

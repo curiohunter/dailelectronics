@@ -153,6 +153,52 @@ export function useUploadBankDeposit() {
   })
 }
 
+// ===== Mutation 훅: 잔액 조정 =====
+
+interface BalanceAdjustmentPayload {
+  customers: Array<{
+    customerId: string
+    companyName: string
+    aliasNames?: string[]
+    amount: number
+  }>
+}
+
+export function useBalanceAdjustment() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (payload: BalanceAdjustmentPayload) => {
+      const res = await fetch('/api/balance-adjust', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(error.error || '잔액 조정 실패')
+      }
+
+      return res.json()
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['all-data'] })
+      toast({
+        title: '잔액 조정 완료',
+        description: data.message,
+      })
+    },
+    onError: (error: Error) => {
+      toast({
+        title: '잔액 조정 실패',
+        description: error.message,
+        variant: 'destructive',
+      })
+    },
+  })
+}
+
 // ===== 유틸리티: 캐시 수동 무효화 =====
 
 export function useInvalidateAllData() {

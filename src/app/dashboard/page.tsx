@@ -5,7 +5,7 @@ import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { DashboardStats } from "@/components/dashboard/DashboardStats"
 import { ReceivablesTable, CustomerReceivable } from "@/components/dashboard/ReceivablesTable"
 import { CustomerDetailModal } from "@/components/dashboard/CustomerDetailModal"
-import { useAllData } from "@/hooks/use-data"
+import { useAllData, useBalanceAdjustment } from "@/hooks/use-data"
 
 interface ReceivablesSummary {
   totalCustomers: number
@@ -36,6 +36,7 @@ export default function DashboardPage() {
 
   // React Query로 데이터 가져오기 (캐시 활용)
   const { data: apiData, isLoading, isError } = useAllData()
+  const balanceAdjustment = useBalanceAdjustment()
 
   // 데이터 계산 로직 (useMemo로 최적화)
   const { customers, summary } = useMemo(() => {
@@ -77,6 +78,7 @@ export default function DashboardPage() {
         company_name: string
         phone: string | null
         notes: string | null
+        alias_names?: string[]
       }
 
       interface Invoice {
@@ -131,7 +133,8 @@ export default function DashboardPage() {
           notes: customer.notes,
           latestInvoiceDate: null,
           latestDepositDate: null,
-          hasOtherDeposits: false
+          hasOtherDeposits: false,
+          aliasNames: customer.alias_names
         })
       })
 
@@ -303,6 +306,17 @@ export default function DashboardPage() {
     setSelectedCustomer(customer)
   }
 
+  const handleBalanceAdjust = async (selectedCustomers: CustomerReceivable[]) => {
+    await balanceAdjustment.mutateAsync({
+      customers: selectedCustomers.map(c => ({
+        customerId: c.id,
+        companyName: c.companyName,
+        aliasNames: c.aliasNames,
+        amount: Math.abs(c.balance)
+      }))
+    })
+  }
+
   const handleMonthChange = (direction: 'prev' | 'next') => {
     const newMonth = new Date(selectedMonth)
     if (direction === 'prev') {
@@ -331,6 +345,7 @@ export default function DashboardPage() {
           customers={customers}
           loading={isLoading}
           onCustomerClick={handleCustomerClick}
+          onBalanceAdjust={handleBalanceAdjust}
         />
 
         {/* Customer Detail Modal */}
