@@ -480,7 +480,7 @@ export function BankDepositsTab({
                   <TableCell>{deposit.branch_name || '-'}</TableCell>
                   <TableCell>
                     {isAutoAdjusted ? (
-                      <Badge className="bg-purple-100 text-purple-700 border-purple-300">
+                      <Badge variant="default">
                         {deposit.relatedCustomer?.company_name || '자동조정'} 🔄
                       </Badge>
                     ) : deposit.hasRelation ? (
