@@ -465,7 +465,7 @@ export function BankDepositsTab({
               paginatedDeposits.map((deposit) => {
                 const isAutoAdjusted = deposit.transaction_type === '잔액조정'
                 return (
-                <TableRow key={deposit.id} className={isAutoAdjusted ? "bg-purple-50" : ""}>
+                <TableRow key={deposit.id}>
                   <TableCell>{formatDate(deposit.transaction_date)}</TableCell>
                   <TableCell>{deposit.transaction_time || '-'}</TableCell>
                   <TableCell>
@@ -476,7 +476,7 @@ export function BankDepositsTab({
                       )}
                     </div>
                   </TableCell>
-                  <TableCell className={cn("font-medium", isAutoAdjusted && "text-purple-600")}>{formatCurrency(deposit.deposit_amount)}</TableCell>
+                  <TableCell className="font-medium">{formatCurrency(deposit.deposit_amount)}</TableCell>
                   <TableCell>{deposit.branch_name || '-'}</TableCell>
                   <TableCell>
                     {isAutoAdjusted ? (

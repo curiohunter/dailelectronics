@@ -275,6 +275,7 @@ export function ReceivablesTable({ customers, loading, onCustomerClick, onBalanc
             onClick={() => setFilterStatus('complete')}
             className={filterStatus === 'complete' ? 'bg-green-600 hover:bg-green-700' : ''}
           >
+            <CircleIcon className="h-3 w-3 fill-green-500 text-green-500 mr-1.5" />
             수금완료 {customers.filter(c => c.status === 'complete').length}개
           </Button>
           <Button
@@ -283,6 +284,7 @@ export function ReceivablesTable({ customers, loading, onCustomerClick, onBalanc
             onClick={() => setFilterStatus('unpaid')}
             className={filterStatus === 'unpaid' ? 'bg-red-600 hover:bg-red-700' : ''}
           >
+            <CircleIcon className="h-3 w-3 fill-red-500 text-red-500 mr-1.5" />
             미수금 {customers.filter(c => c.status === 'unpaid').length}개
           </Button>
           <Button
@@ -291,6 +293,7 @@ export function ReceivablesTable({ customers, loading, onCustomerClick, onBalanc
             onClick={() => setFilterStatus('30days')}
             className={filterStatus === '30days' ? 'bg-yellow-600 hover:bg-yellow-700' : ''}
           >
+            <CircleIcon className="h-3 w-3 fill-yellow-500 text-yellow-500 mr-1.5" />
             30일+ {customers.filter(c => c.status === 'unpaid' && c.overdueDays && c.overdueDays >= 30).length}개
           </Button>
           <Button
@@ -299,6 +302,7 @@ export function ReceivablesTable({ customers, loading, onCustomerClick, onBalanc
             onClick={() => setFilterStatus('60days')}
             className={filterStatus === '60days' ? 'bg-orange-600 hover:bg-orange-700' : ''}
           >
+            <CircleIcon className="h-3 w-3 fill-orange-500 text-orange-500 mr-1.5" />
             60일+ {customers.filter(c => c.status === 'unpaid' && c.overdueDays && c.overdueDays >= 60).length}개
           </Button>
           <Button
@@ -307,6 +311,7 @@ export function ReceivablesTable({ customers, loading, onCustomerClick, onBalanc
             onClick={() => setFilterStatus('90days')}
             className={filterStatus === '90days' ? 'bg-red-700 hover:bg-red-800' : ''}
           >
+            <CircleIcon className="h-3 w-3 fill-red-700 text-red-700 mr-1.5" />
             90일+ {customers.filter(c => c.status === 'unpaid' && c.overdueDays && c.overdueDays >= 90).length}개
           </Button>
           <Button
@@ -315,6 +320,7 @@ export function ReceivablesTable({ customers, loading, onCustomerClick, onBalanc
             onClick={() => setFilterStatus('overpaid')}
             className={filterStatus === 'overpaid' ? 'bg-blue-600 hover:bg-blue-700' : ''}
           >
+            <CircleIcon className="h-3 w-3 fill-blue-500 text-blue-500 mr-1.5" />
             과납 {customers.filter(c => c.status === 'overpaid').length}개
           </Button>
         </div>
